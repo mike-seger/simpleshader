@@ -68,25 +68,22 @@ inline float dot(vec2 a, vec2 b) {
     return a.x * b.x + a.y * b.y;
 }
 
-inline float abs(float v) { return fabsf(v); }
 inline vec2  abs(vec2 v)  { return vec2(fabsf(v.x), fabsf(v.y)); }
 inline vec4  abs(vec4 v)  { return vec4(fabsf(v.x), fabsf(v.y), fabsf(v.z), fabsf(v.w)); }
 
-inline float sin(float v) { return sinf(v); }
 inline vec2  sin(vec2 v)  { return vec2(sinf(v.x), sinf(v.y)); }
 inline vec4  sin(vec4 v)  { return vec4(sinf(v.x), sinf(v.y), sinf(v.z), sinf(v.w)); }
 
-inline float cos(float v) { return cosf(v); }
 inline vec2  cos(vec2 v)  { return vec2(cosf(v.x), cosf(v.y)); }
 inline vec4  cos(vec4 v)  { return vec4(cosf(v.x), cosf(v.y), cosf(v.z), cosf(v.w)); }
 
-inline float tanh(float v) { return tanhf(v); }
 inline vec2  tanh(vec2 v)  { return vec2(tanhf(v.x), tanhf(v.y)); }
 inline vec4  tanh(vec4 v)  { return vec4(tanhf(v.x), tanhf(v.y), tanhf(v.z), tanhf(v.w)); }
 
-inline float exp(float v) { return expf(v); }
 inline vec2  exp(vec2 v)  { return vec2(expf(v.x), expf(v.y)); }
 inline vec4  exp(vec4 v)  { return vec4(expf(v.x), expf(v.y), expf(v.z), expf(v.w)); }
+
+
 
 int main() {
     char buf[256];
@@ -114,8 +111,8 @@ int main() {
                 vec2 FC(x, y), r(w, h);
                 vec2 p=(FC*2.-r)/r.y,l,
                     v=p*(1.-(l+=abs(.7-dot(p,p))))/.2;
-                for(float i;i++<8.;o+=(sin(v.xyyx)+1.)*abs(v.x-v.y)*.2)
-                    v+=cos(v.yx*i+vec2(0,i)+t)/i+.7;
+                for(float i;i++<8.;o+=(sin(vec4(v.x,v.y,v.y,v.x))+1.)*abs(v.x-v.y)*.2)
+                    v+=cos(vec2(v.y,v.x)*i+vec2(0,i)+t)/i+.7;
                     
                 o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
                 //
