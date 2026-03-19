@@ -98,14 +98,6 @@ int main() {
         fprintf(f, "255\n");
         for (int y=0; y<h; ++y) {
             for (int x=0; x<w; ++x) {
-                /* // Original GLSL code:
-                    vec2 p=(FC.xy*2.-r)/r.y,l,v=p*(1.-(l+=abs(.7-dot(p,p))))/.2;
-                    for(float i;i++<8.;o+=(sin(v.xyyx)+1.)*abs(v.x-v.y)*.2)
-                        v+=cos(v.yx*i+vec2(0,i)+t)/i+.7;
-                    o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
-                */
-
-                // Translated to C++:
                 vec4 o;
                 float t = i / 60.f;
                 vec2 FC(x, y), r(w, h);
@@ -115,25 +107,9 @@ int main() {
                     v+=cos(vec2(v.y,v.x)*i+vec2(0,i)+t)/i+.7;
                     
                 o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
-                //
-/*
-                vec2 p = (FC.xy * 2. - r) / r.y, l, i,
-                    v = p * (1. + 4. - 4. * abs(0.7 - dot(p, p)));
-
-                for (; i.y++ < 8.; o += (sin(v.xyyx) + 1.) * abs(v.x - v.y));
-                {
-                    v += cos(v.yx * i.y + i + t) / i.y + 0.7;
-                }
-
-                o = tanh(exp(p.y * vec4(1, -1, -2, 0)) * exp(-4. * l.x) / o);
-*/
-
                 fputc(o.x * 255, f);
                 fputc(o.y * 255, f);
                 fputc(o.z * 255, f);
-                // fputc((((x+i)/60+(y+i)/60)%2)*0xFF, f);
-                // fputc(0x00, f);
-                // fputc(0x00, f);
             }
         }
         fclose(f);
