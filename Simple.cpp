@@ -83,7 +83,26 @@ inline vec4  tanh(vec4 v)  { return vec4(tanhf(v.x), tanhf(v.y), tanhf(v.z), tan
 inline vec2  exp(vec2 v)  { return vec2(expf(v.x), expf(v.y)); }
 inline vec4  exp(vec4 v)  { return vec4(expf(v.x), expf(v.y), expf(v.z), expf(v.w)); }
 
+void writePixelPlasmaGlobe(FILE *f, int x, int y, int w, int h, int i) {
+    vec4 o;
+    float t = i / 60.f;
+    vec2 FC(x, y), r(w, h);
 
+    vec2 p = (FC * 2. - r) / r.y;
+    vec2 l;
+    l += abs(.7 - dot(p, p));
+    vec2 v = p * (1. - l) / .2;
+
+    for (float i = 1.; i <= 8.; i += 1.) {
+        o += (sin(vec4(v.x, v.y, v.y, v.x)) + 1.) * abs(v.x - v.y) * .2;
+        v += cos(vec2(v.y, v.x) * i + vec2(0, i) + t) / i + .7;
+    }
+
+    o = tanh(exp(p.y * vec4(1, -1, -2, 0)) * exp(-4. * l.x) / o);
+    fputc(o.x * 255, f);
+    fputc(o.y * 255, f);
+    fputc(o.z * 255, f);
+}
 
 int main() {
     char buf[256];
@@ -98,18 +117,7 @@ int main() {
         fprintf(f, "255\n");
         for (int y=0; y<h; ++y) {
             for (int x=0; x<w; ++x) {
-                vec4 o;
-                float t = i / 60.f;
-                vec2 FC(x, y), r(w, h);
-                vec2 p=(FC*2.-r)/r.y,l,
-                    v=p*(1.-(l+=abs(.7-dot(p,p))))/.2;
-                for(float i;i++<8.;o+=(sin(vec4(v.x,v.y,v.y,v.x))+1.)*abs(v.x-v.y)*.2)
-                    v+=cos(vec2(v.y,v.x)*i+vec2(0,i)+t)/i+.7;
-                    
-                o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
-                fputc(o.x * 255, f);
-                fputc(o.y * 255, f);
-                fputc(o.z * 255, f);
+                writePixelPlasmaGlobe(f, x, y, w, h, i);
             }
         }
         fclose(f);
