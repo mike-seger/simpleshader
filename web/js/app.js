@@ -22,6 +22,7 @@ const chkPopout     = document.getElementById("chk-popout");
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
 let popoutWin = null;     // reference to pop-out window
+let popoutPoll = null;    // interval to detect pop-out closure
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
@@ -158,14 +159,20 @@ function openPopout() {
   r.compile(editor.getValue());
   r.start();
 
-  popoutWin.addEventListener("beforeunload", () => {
-    chkPopout.checked = false;
-    restoreEmbedded();
-    popoutWin = null;
-  });
+  // Poll to detect the pop-out being closed (beforeunload is unreliable)
+  popoutPoll = setInterval(() => {
+    if (!popoutWin || popoutWin.closed) {
+      clearInterval(popoutPoll);
+      popoutPoll = null;
+      chkPopout.checked = false;
+      restoreEmbedded();
+      popoutWin = null;
+    }
+  }, 300);
 }
 
 function closePopout() {
+  if (popoutPoll) { clearInterval(popoutPoll); popoutPoll = null; }
   if (popoutWin && !popoutWin.closed) popoutWin.close();
   popoutWin = null;
   restoreEmbedded();
