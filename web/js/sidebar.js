@@ -159,6 +159,12 @@ export default class Sidebar {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         this._navigate(e.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+
+      if (e.key === "Delete") {
+        e.preventDefault();
+        this.deleteSelected();
       }
     });
   }
