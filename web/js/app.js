@@ -18,6 +18,11 @@ const btnApply      = document.getElementById("btn-apply");
 const btnPlayPause  = document.getElementById("btn-playpause");
 const chkDebug      = document.getElementById("chk-debug");
 const chkPopout     = document.getElementById("chk-popout");
+const btnToggleList = document.getElementById("btn-toggle-list");
+const btnNew        = document.getElementById("btn-new");
+const btnDuplicate  = document.getElementById("btn-duplicate");
+const btnDelete     = document.getElementById("btn-delete");
+const sidebarList   = document.getElementById("sidebar-list");
 
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
@@ -63,7 +68,7 @@ btnApply.addEventListener("click", () => applyShader(editor.getValue()));
 
 btnPlayPause.addEventListener("click", () => {
   renderer.togglePause();
-  btnPlayPause.textContent = renderer.paused ? "\u25B6" : "\u25A0";
+  btnPlayPause.textContent = renderer.paused ? "play_arrow" : "pause";
 });
 
 chkDebug.addEventListener("change", () => {
@@ -77,6 +82,19 @@ chkPopout.addEventListener("change", () => {
     closePopout();
   }
 });
+
+// ── Icon bar ──────────────────────────────────────────────
+btnToggleList.addEventListener("click", () => {
+  const hidden = sidebarList.classList.toggle("hidden");
+  btnToggleList.textContent = hidden ? "left_panel_open" : "left_panel_close";
+  btnNew.classList.toggle("hidden", hidden);
+  btnDuplicate.classList.toggle("hidden", hidden);
+  btnDelete.classList.toggle("hidden", hidden);
+});
+
+btnNew.addEventListener("click", () => sidebar.createNew());
+btnDuplicate.addEventListener("click", () => sidebar.duplicateSelected(editor.getValue()));
+btnDelete.addEventListener("click", () => sidebar.deleteSelected());
 
 // ── Shader selection ──────────────────────────────────────
 

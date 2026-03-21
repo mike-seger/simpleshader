@@ -2,21 +2,68 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; font-family: system-ui, sans-serif; background: #1e1e1e; color: #ccc; }
 
+/* ── Material Symbols icon font ────────────────────────── */
+@font-face {
+  font-family: 'Material Icons Round-Regular';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../font/symbols.woff2') format('woff2');
+}
+
 /* ── Layout ────────────────────────────────────────────── */
 body {
   display: flex;
 }
 
-/* Sidebar */
+/* ── Sidebar ───────────────────────────────────────────── */
 #sidebar {
-  width: 240px;
-  min-width: 180px;
+  display: flex;
+  flex-direction: row;
   background: #252526;
   border-right: 1px solid #333;
+  overflow: hidden;
+}
+
+/* Icon bar — fixed left strip */
+#sidebar-icons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  background: #1e1e1e;
+  border-right: 1px solid #333;
+  flex-shrink: 0;
+}
+.sb-icon {
+  font-family: 'Material Icons Round-Regular';
+  font-size: 22px;
+  line-height: 1;
+  background: transparent;
+  color: #888;
+  border: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+.sb-icon:hover { color: #ddd; background: #333; }
+
+/* Shader list panel */
+#sidebar-list {
+  width: 210px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+#sidebar-list.hidden { display: none; }
+
 .sidebar-header {
   padding: 12px 16px;
   font-size: 13px;
@@ -71,23 +118,6 @@ body {
 }
 .tree-item:hover { background: #2a2d2e; }
 .tree-item.active { background: #094771; color: #fff; }
-
-/* Custom group add button */
-.tree-add-btn {
-  margin-left: auto;
-  background: transparent;
-  color: #888;
-  border: 1px solid #555;
-  border-radius: 3px;
-  width: 20px;
-  height: 20px;
-  font-size: 14px;
-  line-height: 18px;
-  text-align: center;
-  cursor: pointer;
-  padding: 0;
-}
-.tree-add-btn:hover { color: #fff; border-color: #888; }
 
 /* ── Main area ─────────────────────────────────────────── */
 #main {
@@ -180,12 +210,14 @@ body {
 #btn-apply:hover { background: #1a8ad4; }
 
 #btn-playpause {
+  font-family: 'Material Icons Round-Regular';
   background: #444;
   color: #fff;
   border: none;
-  padding: 4px 10px;
+  padding: 4px 6px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
   min-width: 28px;
   text-align: center;
@@ -201,7 +233,33 @@ body {
   cursor: pointer;
   user-select: none;
 }
-.toolbar-check input { accent-color: #007acc; }
+.toolbar-check input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: #2a2a2a;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.toolbar-check input[type="checkbox"]:checked {
+  background: #007acc;
+  border-color: #007acc;
+}
+.toolbar-check input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
 
 #editor-container {
   flex: 1;

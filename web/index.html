@@ -7,10 +7,18 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- Left sidebar: shader list -->
+  <!-- Left sidebar: icon bar + shader list -->
   <aside id="sidebar">
-    <div class="sidebar-header">Shaders</div>
-    <nav id="shader-tree"></nav>
+    <div id="sidebar-icons">
+      <button class="sb-icon" id="btn-toggle-list" title="Toggle shader list">left_panel_close</button>
+      <button class="sb-icon" id="btn-new" title="New shader">add</button>
+      <button class="sb-icon" id="btn-duplicate" title="Duplicate shader">content_copy</button>
+      <button class="sb-icon" id="btn-delete" title="Delete custom shader">delete</button>
+    </div>
+    <div id="sidebar-list">
+      <div class="sidebar-header">Shaders</div>
+      <nav id="shader-tree"></nav>
+    </div>
   </aside>
 
   <!-- Main area: preview + editor -->
@@ -32,7 +40,7 @@
     <section id="editor-pane">
       <div id="editor-toolbar">
         <button id="btn-apply" title="Apply shader (Ctrl+Enter)">&#9650;</button>
-        <button id="btn-playpause" title="Play / Pause">&#9632;</button>
+        <button id="btn-playpause" class="tb-icon" title="Play / Pause">pause</button>
         <label class="toolbar-check">
           <input type="checkbox" id="chk-debug"> Debug
         </label>

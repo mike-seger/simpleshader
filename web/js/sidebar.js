@@ -1,10 +1,22 @@
 /**
- * Sidebar — collapsible tree with keyboard navigation.
+ * Sidebar — collapsible tree with keyboard navigation and accordion behavior.
  * Renders built-in shaders from the index + custom shaders from localStorage.
  */
 
 import SHADER_INDEX from "../shaders/index.js";
-import { loadCustomShaders, upsertCustomShader, renameCustomShader } from "./store.js";
+import { loadCustomShaders, upsertCustomShader, renameCustomShader, deleteCustomShader } from "./store.js";
+
+let defaultTemplate = null;
+
+async function getDefaultTemplate() {
+  if (defaultTemplate !== null) return defaultTemplate;
+  try {
+    const res = await fetch("shaders/default.glsl");
+    if (res.ok) defaultTemplate = await res.text();
+    else defaultTemplate = "";
+  } catch { defaultTemplate = ""; }
+  return defaultTemplate;
+}
 
 export default class Sidebar {
   /**
@@ -16,6 +28,7 @@ export default class Sidebar {
     this._onSelect = onSelect;
     this._activeEl = null;
     this._items = [];
+    this._folders = [];
     this._build();
     this._initKeyboard();
   }
@@ -25,6 +38,7 @@ export default class Sidebar {
   _build() {
     this._container.innerHTML = "";
     this._items = [];
+    this._folders = [];
 
     const frag = document.createDocumentFragment();
 
@@ -40,21 +54,12 @@ export default class Sidebar {
 
   _buildFolder(label, shaders, isCustom) {
     const folder = document.createElement("div");
-    folder.className = "tree-folder";
+    folder.className = "tree-folder collapsed";
 
     const lbl = document.createElement("div");
     lbl.className = "tree-folder-label";
     lbl.innerHTML = `<span class="arrow">▼</span> ${this._esc(label)}`;
-    lbl.addEventListener("click", () => folder.classList.toggle("collapsed"));
-
-    if (isCustom) {
-      const addBtn = document.createElement("button");
-      addBtn.className = "tree-add-btn";
-      addBtn.textContent = "+";
-      addBtn.title = "New shader";
-      addBtn.addEventListener("click", (e) => { e.stopPropagation(); this._createNew(); });
-      lbl.appendChild(addBtn);
-    }
+    lbl.addEventListener("click", () => this._toggleFolder(folder));
 
     folder.appendChild(lbl);
 
@@ -83,6 +88,7 @@ export default class Sidebar {
     }
 
     folder.appendChild(children);
+    this._folders.push(folder);
     return folder;
   }
 
@@ -90,6 +96,28 @@ export default class Sidebar {
     const customs = loadCustomShaders();
     const shaders = customs.map((c) => ({ name: c.name }));
     return this._buildFolder("custom", shaders, true);
+  }
+
+  /* ── Accordion: only one folder open ─────────────────── */
+
+  _toggleFolder(folder) {
+    if (folder.classList.contains("collapsed")) {
+      // Close all others first
+      for (const f of this._folders) {
+        f.classList.add("collapsed");
+      }
+      folder.classList.remove("collapsed");
+    } else {
+      folder.classList.add("collapsed");
+    }
+  }
+
+  _expandFolderOf(el) {
+    const folder = el.closest(".tree-folder");
+    if (folder && folder.classList.contains("collapsed")) {
+      for (const f of this._folders) f.classList.add("collapsed");
+      folder.classList.remove("collapsed");
+    }
   }
 
   /* ── Selection ───────────────────────────────────────── */
@@ -116,6 +144,7 @@ export default class Sidebar {
   selectFirst() {
     const first = this._container.querySelector(".tree-item");
     if (!first) return;
+    this._expandFolderOf(first);
     if (first.dataset.path) {
       this._select(first, first.dataset.path);
     } else if (first.dataset.custom) {
@@ -141,10 +170,7 @@ export default class Sidebar {
     if (next < 0 || next >= this._items.length) return;
 
     const el = this._items[next];
-    const folder = el.closest(".tree-folder");
-    if (folder && folder.classList.contains("collapsed")) {
-      folder.classList.remove("collapsed");
-    }
+    this._expandFolderOf(el);
 
     if (el.dataset.path) {
       this._select(el, el.dataset.path);
@@ -153,33 +179,48 @@ export default class Sidebar {
     }
   }
 
-  /* ── Custom shader management ────────────────────────── */
+  /* ── Custom shader management (public API) ───────────── */
 
-  _createNew() {
-    const name = prompt("New shader name:");
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
-    const defaultSrc = [
-      "precision highp float;",
-      "",
-      "uniform vec2 u_resolution;",
-      "uniform float u_time;",
-      "",
-      "void main() {",
-      "    vec2 uv = gl_FragCoord.xy / u_resolution;",
-      "    gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);",
-      "}",
-    ].join("\n");
-    upsertCustomShader(trimmed, defaultSrc);
-    this._build();
-    // Find and select the newly created entry
-    const items = this._container.querySelectorAll(".tree-item[data-custom]");
-    for (const el of items) {
-      if (el.dataset.custom === trimmed) {
-        this._selectCustom(el, trimmed);
-        return;
-      }
+  async createNew() {
+    const src = await getDefaultTemplate();
+    const customs = loadCustomShaders();
+    const existing = new Set(customs.map((c) => c.name));
+    let name;
+    for (let i = 1; i <= 999; i++) {
+      const candidate = "new " + String(i).padStart(3, "0");
+      if (!existing.has(candidate)) { name = candidate; break; }
     }
+    if (!name) return;
+    upsertCustomShader(name, src);
+    this._rebuild();
+    this._selectCustomByName(name);
+  }
+
+  duplicateSelected(currentSource) {
+    if (!this._activeEl) return;
+    const baseName = this._activeEl.dataset.custom
+      || this._activeEl.textContent.trim();
+    const customs = loadCustomShaders();
+    const existing = new Set(customs.map((c) => c.name));
+    let name;
+    for (let i = 2; i <= 99; i++) {
+      const candidate = baseName + "_" + i;
+      if (!existing.has(candidate)) { name = candidate; break; }
+    }
+    if (!name) return;
+    upsertCustomShader(name, currentSource);
+    this._rebuild();
+    this._selectCustomByName(name);
+  }
+
+  deleteSelected() {
+    if (!this._activeEl || !this._activeEl.dataset.custom) return;
+    const name = this._activeEl.dataset.custom;
+    deleteCustomShader(name);
+    this._activeEl = null;
+    this._rebuild();
+    // Select first remaining item
+    this.selectFirst();
   }
 
   _renameItem(el, oldName) {
@@ -187,8 +228,7 @@ export default class Sidebar {
     if (!newName || !newName.trim() || newName.trim() === oldName) return;
     renameCustomShader(oldName, newName.trim());
     this._rebuild();
-    const newEl = this._container.querySelector(`[data-custom="${CSS.escape(newName.trim())}"]`);
-    if (newEl) this._selectCustom(newEl, newName.trim());
+    this._selectCustomByName(newName.trim());
   }
 
   saveToCustom(name, source) {
@@ -206,16 +246,35 @@ export default class Sidebar {
     return this._activeEl ? this._activeEl.dataset.path || null : null;
   }
 
+  isCustomSelected() {
+    return !!(this._activeEl && this._activeEl.dataset.custom);
+  }
+
+  _selectCustomByName(name) {
+    const items = this._container.querySelectorAll(".tree-item[data-custom]");
+    for (const el of items) {
+      if (el.dataset.custom === name) {
+        this._expandFolderOf(el);
+        this._selectCustom(el, name);
+        return;
+      }
+    }
+  }
+
   _rebuild() {
     const activePath = this._activeEl?.dataset.path;
     const activeCustom = this._activeEl?.dataset.custom;
     this._build();
     if (activePath) {
       const el = this._container.querySelector(`[data-path="${CSS.escape(activePath)}"]`);
-      if (el) { el.classList.add("active"); this._activeEl = el; }
+      if (el) { el.classList.add("active"); this._activeEl = el; this._expandFolderOf(el); }
     } else if (activeCustom) {
-      const el = this._container.querySelector(`[data-custom="${CSS.escape(activeCustom)}"]`);
-      if (el) { el.classList.add("active"); this._activeEl = el; }
+      const items = this._container.querySelectorAll(".tree-item[data-custom]");
+      for (const el of items) {
+        if (el.dataset.custom === activeCustom) {
+          el.classList.add("active"); this._activeEl = el; this._expandFolderOf(el); break;
+        }
+      }
     }
   }
 
