@@ -14,7 +14,8 @@ void main() {
     vec2 r = u_resolution;
     float t = u_time;
 
-    vec2 p = (gl_FragCoord.xy * 2.0 - r) / r.y;
+    float a = min(r.x, r.y);
+    vec2 p = (gl_FragCoord.xy * 2.0 - r) / a;
     float N = 400.0;
 
     for (int ii = 0; ii < 400; ii++) {

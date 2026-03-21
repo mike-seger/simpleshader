@@ -13,9 +13,9 @@ void main() {
     vec4 o = vec4(0.0);
     float t = u_time;
     float c = cos(t), s = sin(t);
-    float a = u_resolution.y;
+    float a = min(u_resolution.x, u_resolution.y);
     float z = -a;
-    vec2 f = 2.0 * gl_FragCoord.xy / a - 1.0;
+    vec2 f = (2.0 * gl_FragCoord.xy - u_resolution) / a;
 
     for (int ii = 1; ii <= 100; ii++) {
         float i = float(ii);

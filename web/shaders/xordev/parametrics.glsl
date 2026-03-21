@@ -156,9 +156,10 @@ vec3 tone(vec3 color, float gamma)
 
 void main()
 {
-	vec2 p = gl_FragCoord.xy / u_resolution.xy-0.5;
-    vec2 bp = p+0.5;
-	p.x *= u_resolution.x/u_resolution.y;
+    float a = min(u_resolution.x, u_resolution.y);
+
+    vec2 p = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / a;
+    vec2 bp = gl_FragCoord.xy / u_resolution.xy;
     p *= 19.;
     float rz = intersect(p,0.,30.);
     

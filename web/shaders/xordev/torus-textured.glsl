@@ -7,9 +7,9 @@ void main() {
     vec4 o = vec4(0.0);
     float t = u_time;
     float c = cos(t), s = sin(t);
-    float a = u_resolution.y;
+    float a = min(u_resolution.x, u_resolution.y);
     float z = a;
-    vec2 f = (gl_FragCoord.xy * 2.0 - a) / a;
+    vec2 f = (gl_FragCoord.xy * 2.0 - u_resolution) / a;
 
     for (int ii = 0; ii < 1000; ii++) {
         float ti = t + float(ii);

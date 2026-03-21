@@ -20,7 +20,8 @@ float line(vec2 A, vec2 B, vec2 C, float thickness) {
 }
 
 void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+    float a = 1.4*min(u_resolution.x, u_resolution.y);
+    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / a;
 
     vec3 color = vec3(0.0);
     

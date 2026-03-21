@@ -8,7 +8,8 @@ void main() {
     vec2 r = u_resolution;
     float t = u_time;
 
-    vec2 p = (gl_FragCoord.xy * 2.0 - r) / r.y,
+    float a = min(u_resolution.x, u_resolution.y);
+    vec2 p = (gl_FragCoord.xy * 2.0 - r) / (a * 0.70),
          l,
          v = p * (1.0 - (l += abs(0.7 - dot(p, p)))) / 0.2;
 

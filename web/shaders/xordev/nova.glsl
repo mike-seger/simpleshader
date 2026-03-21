@@ -14,7 +14,8 @@ void main() {
     vec2 r = u_resolution;
     float t = u_time;
 
-    vec2 p = (gl_FragCoord.xy * 2.0 - r.x) / r.y;
+    float s = min(r.x, r.y);
+    vec2 p = (gl_FragCoord.xy * 2.0 - r) / s;
     float l = 1.0 - length(p);
     o += tanh_safe((1.1 + sin(p.x + t + vec4(0.0, 2.0, 4.0, 0.0))) / 200.0 / max(l, -l * 0.1));
 

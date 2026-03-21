@@ -14,10 +14,11 @@ void main() {
     float z = 0.001;
     float d = 0.0;
     float s = 0.0;
+    float a = min(u_resolution.x, u_resolution.y);
 
     for (int ii = 1; ii <= 100; ii++) {
         float i = float(ii);
-        vec3 p = z * normalize(gl_FragCoord.xyz * 2.0 - vec3(u_resolution.x, u_resolution.y, u_resolution.y));
+        vec3 p = z * normalize(vec3(2.0 * gl_FragCoord.xy - u_resolution, -a));
         p.z += 9.0;
         vec3 v = p;
 
