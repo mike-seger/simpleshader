@@ -20,7 +20,8 @@
       <canvas id="glcanvas"></canvas>
       <div id="error-overlay" class="hidden"></div>
       <div id="debug-box" class="hidden">
-        <span id="fps-display">0 FPS</span>
+        <div id="fps-display">0 FPS</div>
+        <div id="time-display">00:00</div>
       </div>
     </section>
 
@@ -30,9 +31,13 @@
     <!-- Editor pane -->
     <section id="editor-pane">
       <div id="editor-toolbar">
-        <button id="btn-apply" title="Apply shader (Ctrl+Enter)">&#9654; Apply</button>
+        <button id="btn-apply" title="Apply shader (Ctrl+Enter)">&#9650;</button>
+        <button id="btn-playpause" title="Play / Pause">&#9632;</button>
         <label class="toolbar-check">
-          <input type="checkbox" id="chk-debug"> FPS
+          <input type="checkbox" id="chk-debug"> Debug
+        </label>
+        <label class="toolbar-check">
+          <input type="checkbox" id="chk-popout"> Pop-out
         </label>
       </div>
       <div id="editor-container"></div>

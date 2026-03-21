@@ -21,6 +21,8 @@ export default class Renderer {
     this._animId = null;
     this._startTime = performance.now();
     this._error = null;
+    this._paused = false;
+    this._pauseTime = 0;
 
     // FPS tracking
     this._frames = 0;
@@ -114,6 +116,25 @@ export default class Renderer {
     }
   }
 
+  /** Pause / resume the time uniform (rendering continues for FPS) */
+  get paused() { return this._paused; }
+  togglePause() {
+    if (this._paused) {
+      // Resume: shift _startTime forward by the paused duration
+      this._startTime += performance.now() - this._pauseTime;
+      this._paused = false;
+    } else {
+      this._pauseTime = performance.now();
+      this._paused = true;
+    }
+  }
+
+  /** Current u_time value in seconds */
+  getTime() {
+    const ref = this._paused ? this._pauseTime : performance.now();
+    return (ref - this._startTime) / 1000;
+  }
+
   _draw() {
     const gl = this.gl;
     if (!this._program) return;
@@ -130,7 +151,7 @@ export default class Renderer {
 
     gl.useProgram(this._program);
     if (this._uTime !== null)
-      gl.uniform1f(this._uTime, (performance.now() - this._startTime) / 1000);
+      gl.uniform1f(this._uTime, this.getTime());
     if (this._uResolution !== null)
       gl.uniform2f(this._uResolution, w, h);
 
