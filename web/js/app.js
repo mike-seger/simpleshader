@@ -6,7 +6,7 @@ import Renderer from "./renderer.js";
 import Editor from "./editor.js";
 import Sidebar from "./sidebar.js";
 import { initSplitter } from "./splitter.js";
-import { upsertCustomShader } from "./store.js";
+import { upsertCustomShader, loadCustomShaders } from "./store.js";
 
 // ── DOM refs ──────────────────────────────────────────────
 const canvas        = document.getElementById("glcanvas");
@@ -16,18 +16,21 @@ const fpsDisplay    = document.getElementById("fps-display");
 const timeDisplay   = document.getElementById("time-display");
 const btnApply      = document.getElementById("btn-apply");
 const btnPlayPause  = document.getElementById("btn-playpause");
-const chkDebug      = document.getElementById("chk-debug");
-const chkPopout     = document.getElementById("chk-popout");
+const btnDebug      = document.getElementById("btn-debug");
+const btnPopout     = document.getElementById("btn-popout");
 const btnToggleList = document.getElementById("btn-toggle-list");
 const btnNew        = document.getElementById("btn-new");
+const btnDownload   = document.getElementById("btn-download");
 const btnDuplicate  = document.getElementById("btn-duplicate");
 const btnDelete     = document.getElementById("btn-delete");
 const sidebarList   = document.getElementById("sidebar-list");
 
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
+let currentPath = null;   // active built-in shader path
 let popoutWin = null;     // reference to pop-out window
 let popoutPoll = null;    // interval to detect pop-out closure
+let debugVisible = false; // debug overlay state
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
@@ -79,32 +82,81 @@ btnPlayPause.addEventListener("click", () => {
   btnPlayPause.textContent = r.paused ? "play_arrow" : "pause";
 });
 
-chkDebug.addEventListener("change", () => {
-  debugBox.classList.toggle("hidden", !chkDebug.checked);
-  if (popoutWin && !popoutWin.closed && popoutWin._debugBox) {
-    popoutWin._debugBox.style.display = chkDebug.checked ? "" : "none";
-  }
-});
-
-chkPopout.addEventListener("change", () => {
-  if (chkPopout.checked) {
-    openPopout();
-  } else {
-    closePopout();
-  }
-});
-
 // ── Icon bar ──────────────────────────────────────────────
+btnDebug.addEventListener("click", () => {
+  debugVisible = !debugVisible;
+  btnDebug.classList.toggle("active", debugVisible);
+  debugBox.classList.toggle("hidden", !debugVisible);
+  if (popoutWin && !popoutWin.closed && popoutWin._debugBox) {
+    popoutWin._debugBox.style.display = debugVisible ? "" : "none";
+  }
+});
+
+btnPopout.addEventListener("click", () => {
+  if (popoutWin && !popoutWin.closed) {
+    closePopout();
+  } else {
+    openPopout();
+  }
+});
+
 btnToggleList.addEventListener("click", () => {
   const hidden = sidebarList.classList.toggle("hidden");
   btnToggleList.textContent = hidden ? "left_panel_open" : "left_panel_close";
   btnNew.classList.toggle("hidden", hidden);
+  btnDownload.classList.toggle("hidden", hidden);
   btnDuplicate.classList.toggle("hidden", hidden);
   btnDelete.classList.toggle("hidden", hidden);
 });
 
 btnNew.addEventListener("click", () => sidebar.createNew());
+btnDownload.addEventListener("click", downloadCustomShaders);
 btnDuplicate.addEventListener("click", () => sidebar.duplicateSelected(editor.getValue()));
+
+// ── Drag-and-drop import ──────────────────────────────────
+let dragCounter = 0;
+sidebarList.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  dragCounter++;
+  sidebarList.classList.add("drag-over");
+});
+sidebarList.addEventListener("dragover", (e) => e.preventDefault());
+sidebarList.addEventListener("dragleave", () => {
+  dragCounter--;
+  if (dragCounter <= 0) { dragCounter = 0; sidebarList.classList.remove("drag-over"); }
+});
+sidebarList.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  sidebarList.classList.remove("drag-over");
+  const files = Array.from(e.dataTransfer.files);
+  const entries = [];
+  for (const file of files) {
+    if (file.name.endsWith(".glsl")) {
+      const source = await file.text();
+      const name = file.name.replace(/\.glsl$/, "");
+      entries.push({ name, source });
+    } else if (file.name.endsWith(".zip")) {
+      try {
+        const JSZip = await loadJSZip();
+        const zip = await JSZip.loadAsync(file);
+        const promises = [];
+        zip.forEach((path, entry) => {
+          if (!entry.dir && path.endsWith(".glsl")) {
+            promises.push(entry.async("string").then(source => {
+              const name = path.split("/").pop().replace(/\.glsl$/, "");
+              entries.push({ name, source });
+            }));
+          }
+        });
+        await Promise.all(promises);
+      } catch (err) {
+        console.error("Failed to read zip:", err);
+      }
+    }
+  }
+  if (entries.length) sidebar.importShaders(entries);
+});
 btnDelete.addEventListener("click", () => sidebar.deleteSelected());
 
 // ── Shader selection ──────────────────────────────────────
@@ -113,10 +165,14 @@ async function onShaderSelect(path, source) {
   if (source !== undefined) {
     // Custom shader — source comes from localStorage
     currentName = path.replace("custom:", "");
+    currentPath = null;
+    localStorage.setItem("simpleshader_last", "custom:" + currentName);
     editor.setValue(source);
     applyShader(source);
   } else {
     currentName = null;
+    currentPath = path;
+    localStorage.setItem("simpleshader_last", path);
     await loadShader(path);
   }
 }
@@ -170,6 +226,35 @@ function hideError() {
 // ── Pop-out preview ───────────────────────────────────────
 
 const previewPane = document.getElementById("preview-pane");
+const hsplit = document.getElementById("hsplit");
+
+// ── Download custom shaders as ZIP ────────────────────────
+let jsZipPromise;
+function loadJSZip() {
+  if (!jsZipPromise) {
+    jsZipPromise = import("https://cdn.jsdelivr.net/npm/jszip@3/+esm")
+      .then(m => m.default);
+  }
+  return jsZipPromise;
+}
+
+async function downloadCustomShaders() {
+  const shaders = loadCustomShaders();
+  if (!shaders.length) return;
+  const JSZip = await loadJSZip();
+  const zip = new JSZip();
+  const folder = zip.folder("custom");
+  for (const { name, source } of shaders) {
+    folder.file(name.endsWith(".glsl") ? name : name + ".glsl", source);
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "custom-shaders.zip";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function openPopout() {
   if (popoutWin && !popoutWin.closed) return;
@@ -177,6 +262,9 @@ function openPopout() {
   // Stop embedded rendering
   renderer.stop();
   previewPane.style.display = "none";
+  hsplit.style.display = "none";
+  btnPopout.classList.add("active");
+  editor.layout();
 
   popoutWin = window.open("", "shader_preview", "width=800,height=600");
   const doc = popoutWin.document;
@@ -196,7 +284,7 @@ function openPopout() {
   popoutWin._fpsEl = fpsEl;
   popoutWin._timeEl = timeEl;
   // Sync current debug visibility
-  dbg.style.display = chkDebug.checked ? "" : "none";
+  dbg.style.display = debugVisible ? "" : "none";
 
   const c = doc.createElement("canvas");
   c.style.cssText = "display:block;width:100%;height:100%";
@@ -206,6 +294,8 @@ function openPopout() {
   popoutWin._renderer = r;
   r.onFps = fpsHandler;
   r.compile(editor.getValue());
+  // Sync pause state
+  if (renderer.paused) r.togglePause();
   r.start();
 
   // Poll to detect the pop-out being closed (beforeunload is unreliable)
@@ -213,7 +303,7 @@ function openPopout() {
     if (!popoutWin || popoutWin.closed) {
       clearInterval(popoutPoll);
       popoutPoll = null;
-      chkPopout.checked = false;
+      btnPopout.classList.remove("active");
       restoreEmbedded();
       popoutWin = null;
     }
@@ -224,13 +314,33 @@ function closePopout() {
   if (popoutPoll) { clearInterval(popoutPoll); popoutPoll = null; }
   if (popoutWin && !popoutWin.closed) popoutWin.close();
   popoutWin = null;
+  btnPopout.classList.remove("active");
   restoreEmbedded();
 }
 
 function restoreEmbedded() {
   previewPane.style.display = "";
+  hsplit.style.display = "";
+  // Recompile current source into embedded renderer so it's in sync
+  renderer.compile(editor.getValue());
   renderer.start();
+  editor.layout();
 }
 
 // ── Boot ──────────────────────────────────────────────────
-sidebar.selectFirst();
+
+// Close any orphaned pop-out from a previous session
+const orphan = window.open("", "shader_preview");
+if (orphan && !orphan.closed && orphan.location.href !== "about:blank") {
+  orphan.close();
+}
+
+// Close pop-out when the main window unloads (reload / close)
+window.addEventListener("beforeunload", () => {
+  if (popoutWin && !popoutWin.closed) popoutWin.close();
+});
+
+const lastKey = localStorage.getItem("simpleshader_last");
+if (!lastKey || !sidebar.selectByKey(lastKey)) {
+  sidebar.selectFirst();
+}

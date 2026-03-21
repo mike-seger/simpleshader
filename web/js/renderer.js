@@ -82,6 +82,12 @@ export default class Renderer {
 
     this._error = null;
     this._startTime = performance.now();
+    // Draw one frame immediately so new shader is visible even when paused
+    if (this._paused) {
+      this._draw();
+      this.canvas.style.backgroundImage = `url(${this.canvas.toDataURL()})`;
+      this.canvas.style.backgroundSize = "100% 100%";
+    }
     return null;
   }
 
@@ -120,12 +126,19 @@ export default class Renderer {
   get paused() { return this._paused; }
   togglePause() {
     if (this._paused) {
-      // Resume: shift _startTime forward by the paused duration
+      // Resume: remove snapshot, shift time, restart loop
+      this.canvas.style.backgroundImage = "";
       this._startTime += performance.now() - this._pauseTime;
       this._paused = false;
+      this.start();
     } else {
       this._pauseTime = performance.now();
       this._paused = true;
+      // Draw final frame, snapshot it as CSS background, then stop
+      this._draw();
+      this.canvas.style.backgroundImage = `url(${this.canvas.toDataURL()})`;
+      this.canvas.style.backgroundSize = "100% 100%";
+      this.stop();
     }
   }
 

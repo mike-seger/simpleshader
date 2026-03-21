@@ -12,8 +12,12 @@
     <div id="sidebar-icons">
       <button class="sb-icon" id="btn-toggle-list" title="Toggle shader list">left_panel_close</button>
       <button class="sb-icon" id="btn-new" title="New shader">add</button>
+      <button class="sb-icon" id="btn-download" title="Download custom shaders">download</button>
       <button class="sb-icon" id="btn-duplicate" title="Duplicate shader">content_copy</button>
       <button class="sb-icon" id="btn-delete" title="Delete custom shader">delete</button>
+      <div class="sb-separator"></div>
+      <button class="sb-icon" id="btn-debug" title="Toggle debug overlay">bug_report</button>
+      <button class="sb-icon" id="btn-popout" title="Pop-out preview">open_in_new</button>
     </div>
     <div id="sidebar-list">
       <div class="sidebar-header">Shaders</div>
@@ -41,12 +45,6 @@
       <div id="editor-toolbar">
         <button id="btn-apply" title="Apply shader (Ctrl+Enter)">&#9650;</button>
         <button id="btn-playpause" class="tb-icon" title="Play / Pause">pause</button>
-        <label class="toolbar-check">
-          <input type="checkbox" id="chk-debug"> Debug
-        </label>
-        <label class="toolbar-check">
-          <input type="checkbox" id="chk-popout"> Pop-out
-        </label>
       </div>
       <div id="editor-container"></div>
     </section>

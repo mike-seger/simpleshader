@@ -216,6 +216,7 @@ export default class Sidebar {
   deleteSelected() {
     if (!this._activeEl || !this._activeEl.dataset.custom) return;
     const name = this._activeEl.dataset.custom;
+    if (!confirm(`Delete "${name}"?`)) return;
     // Find the item above the active one before rebuilding
     this._items = Array.from(this._container.querySelectorAll(".tree-item"));
     const idx = this._items.indexOf(this._activeEl);
@@ -265,6 +266,29 @@ export default class Sidebar {
     return !!(this._activeEl && this._activeEl.dataset.custom);
   }
 
+  /** Select a shader by its key (path or "custom:name"). Returns true if found. */
+  selectByKey(key) {
+    if (key.startsWith("custom:")) {
+      const name = key.slice(7);
+      const items = this._container.querySelectorAll(".tree-item[data-custom]");
+      for (const el of items) {
+        if (el.dataset.custom === name) {
+          this._expandFolderOf(el);
+          this._selectCustom(el, name);
+          return true;
+        }
+      }
+    } else {
+      const el = this._container.querySelector(`[data-path="${CSS.escape(key)}"]`);
+      if (el) {
+        this._expandFolderOf(el);
+        this._select(el, key);
+        return true;
+      }
+    }
+    return false;
+  }
+
   _selectCustomByName(name) {
     const items = this._container.querySelectorAll(".tree-item[data-custom]");
     for (const el of items) {
@@ -291,6 +315,32 @@ export default class Sidebar {
         }
       }
     }
+  }
+
+  /**
+   * Import an array of {name, source} into custom shaders.
+   * Deduplicates names by appending _2, _3, etc.
+   * Selects the last imported shader.
+   */
+  importShaders(entries) {
+    if (!entries.length) return;
+    const customs = loadCustomShaders();
+    const existing = new Set(customs.map(c => c.name));
+    let lastName;
+    for (const { name, source } of entries) {
+      let finalName = name;
+      if (existing.has(finalName)) {
+        for (let i = 2; i <= 999; i++) {
+          const candidate = name + "_" + i;
+          if (!existing.has(candidate)) { finalName = candidate; break; }
+        }
+      }
+      upsertCustomShader(finalName, source);
+      existing.add(finalName);
+      lastName = finalName;
+    }
+    this._rebuild();
+    if (lastName) this._selectCustomByName(lastName);
   }
 
   _esc(text) {

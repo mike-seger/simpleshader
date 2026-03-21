@@ -53,6 +53,14 @@ body {
   padding: 0;
 }
 .sb-icon:hover { color: #ddd; background: #333; }
+.sb-icon.active { color: #fff; background: #007acc; }
+.sb-separator {
+  width: 22px;
+  height: 1px;
+  background: #444;
+  margin: 4px 0;
+  flex-shrink: 0;
+}
 
 /* Shader list panel */
 #sidebar-list {
@@ -63,6 +71,11 @@ body {
   overflow: hidden;
 }
 #sidebar-list.hidden { display: none; }
+#sidebar-list.drag-over {
+  outline: 2px dashed #58a6ff;
+  outline-offset: -2px;
+  background: rgba(88, 166, 255, 0.08);
+}
 
 .sidebar-header {
   padding: 12px 16px;
@@ -223,43 +236,6 @@ body {
   text-align: center;
 }
 #btn-playpause:hover { background: #555; }
-
-.toolbar-check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #aaa;
-  cursor: pointer;
-  user-select: none;
-}
-.toolbar-check input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border: 1px solid #555;
-  border-radius: 2px;
-  background: #2a2a2a;
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-}
-.toolbar-check input[type="checkbox"]:checked {
-  background: #007acc;
-  border-color: #007acc;
-}
-.toolbar-check input[type="checkbox"]:checked::after {
-  content: "";
-  position: absolute;
-  left: 3px;
-  top: 0px;
-  width: 5px;
-  height: 9px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
 
 #editor-container {
   flex: 1;
