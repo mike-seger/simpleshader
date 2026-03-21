@@ -6,6 +6,7 @@ arrow_menu_open
 arrow_outward
 arrow_right
 artist
+bug_report
 cancel
 cast
 cast_connected

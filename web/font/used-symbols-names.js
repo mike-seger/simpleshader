@@ -7,6 +7,7 @@ var SYMBOL_NAMES = [
   'arrow_outward',
   'arrow_right',
   'artist',
+  'bug_report',
   'cancel',
   'cast',
   'cast_connected',

@@ -36,9 +36,15 @@ function fpsHandler(fps) {
   const t = activeRenderer().getTime();
   const mins = Math.floor(t / 60);
   const secs = Math.floor(t % 60);
-  timeDisplay.textContent =
+  const timeStr =
     String(mins).padStart(2, "0") + ":" +
     String(secs).padStart(2, "0");
+  timeDisplay.textContent = timeStr;
+  // Mirror to pop-out
+  if (popoutWin && !popoutWin.closed && popoutWin._fpsEl) {
+    popoutWin._fpsEl.textContent = fps + " FPS";
+    popoutWin._timeEl.textContent = timeStr;
+  }
 }
 renderer.onFps = fpsHandler;
 renderer.start();
@@ -75,6 +81,9 @@ btnPlayPause.addEventListener("click", () => {
 
 chkDebug.addEventListener("change", () => {
   debugBox.classList.toggle("hidden", !chkDebug.checked);
+  if (popoutWin && !popoutWin.closed && popoutWin._debugBox) {
+    popoutWin._debugBox.style.display = chkDebug.checked ? "" : "none";
+  }
 });
 
 chkPopout.addEventListener("change", () => {
@@ -173,6 +182,22 @@ function openPopout() {
   const doc = popoutWin.document;
   doc.title = "Shader Preview";
   doc.body.style.cssText = "margin:0;background:#000;overflow:hidden";
+
+  // Debug overlay
+  const dbg = doc.createElement("div");
+  dbg.id = "debug-box";
+  dbg.style.cssText = "position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#0f0;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:5;pointer-events:none;display:none";
+  const fpsEl = doc.createElement("div");
+  const timeEl = doc.createElement("div");
+  dbg.appendChild(fpsEl);
+  dbg.appendChild(timeEl);
+  doc.body.appendChild(dbg);
+  popoutWin._debugBox = dbg;
+  popoutWin._fpsEl = fpsEl;
+  popoutWin._timeEl = timeEl;
+  // Sync current debug visibility
+  dbg.style.display = chkDebug.checked ? "" : "none";
+
   const c = doc.createElement("canvas");
   c.style.cssText = "display:block;width:100%;height:100%";
   doc.body.appendChild(c);
