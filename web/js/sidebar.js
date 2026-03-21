@@ -216,10 +216,25 @@ export default class Sidebar {
   deleteSelected() {
     if (!this._activeEl || !this._activeEl.dataset.custom) return;
     const name = this._activeEl.dataset.custom;
+    // Find the item above the active one before rebuilding
+    this._items = Array.from(this._container.querySelectorAll(".tree-item"));
+    const idx = this._items.indexOf(this._activeEl);
+    const prevEl = idx > 0 ? this._items[idx - 1] : null;
     deleteCustomShader(name);
     this._activeEl = null;
     this._rebuild();
-    // Select first remaining item
+    // Select the shader above, or fall back to first
+    if (prevEl && prevEl.dataset.path) {
+      const el = this._container.querySelector(`[data-path="${CSS.escape(prevEl.dataset.path)}"]`);
+      if (el) { this._expandFolderOf(el); this._select(el, el.dataset.path); return; }
+    } else if (prevEl && prevEl.dataset.custom) {
+      const items = this._container.querySelectorAll(".tree-item[data-custom]");
+      for (const el of items) {
+        if (el.dataset.custom === prevEl.dataset.custom) {
+          this._expandFolderOf(el); this._selectCustom(el, el.dataset.custom); return;
+        }
+      }
+    }
     this.selectFirst();
   }
 

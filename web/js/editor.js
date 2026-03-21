@@ -62,10 +62,15 @@ export default class Editor {
     });
   }
 
-  /** Replace editor contents */
+  /** Replace editor contents (preserves undo stack) */
   setValue(source) {
     if (!this._editor) return;
-    this._editor.setValue(source);
+    const model = this._editor.getModel();
+    const fullRange = model.getFullModelRange();
+    this._editor.executeEdits("shader-load", [{
+      range: fullRange,
+      text: source,
+    }]);
   }
 
   /** Get current editor contents */

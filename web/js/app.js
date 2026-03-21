@@ -31,15 +31,16 @@ let popoutPoll = null;    // interval to detect pop-out closure
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
-renderer.onFps = (fps) => {
+function fpsHandler(fps) {
   fpsDisplay.textContent = fps + " FPS";
-  const t = renderer.getTime();
+  const t = activeRenderer().getTime();
   const mins = Math.floor(t / 60);
   const secs = Math.floor(t % 60);
   timeDisplay.textContent =
     String(mins).padStart(2, "0") + ":" +
     String(secs).padStart(2, "0");
-};
+}
+renderer.onFps = fpsHandler;
 renderer.start();
 
 // ── Editor ────────────────────────────────────────────────
@@ -67,8 +68,9 @@ initSplitter(
 btnApply.addEventListener("click", () => applyShader(editor.getValue()));
 
 btnPlayPause.addEventListener("click", () => {
-  renderer.togglePause();
-  btnPlayPause.textContent = renderer.paused ? "play_arrow" : "pause";
+  const r = activeRenderer();
+  r.togglePause();
+  btnPlayPause.textContent = r.paused ? "play_arrow" : "pause";
 });
 
 chkDebug.addEventListener("change", () => {
@@ -122,6 +124,14 @@ async function loadShader(path) {
   }
 }
 
+// ── Active renderer helper ────────────────────────────────
+
+function activeRenderer() {
+  return (popoutWin && !popoutWin.closed && popoutWin._renderer)
+    ? popoutWin._renderer
+    : renderer;
+}
+
 // ── Apply / compile ───────────────────────────────────────
 
 function applyShader(source) {
@@ -130,16 +140,11 @@ function applyShader(source) {
     sidebar.saveToCustom(currentName, source);
   }
 
-  const err = renderer.compile(source);
+  const err = activeRenderer().compile(source);
   if (err) {
     showError(err);
   } else {
     hideError();
-  }
-
-  // Mirror to pop-out if open
-  if (popoutWin && !popoutWin.closed && popoutWin._renderer) {
-    popoutWin._renderer.compile(source);
   }
 }
 
@@ -174,6 +179,7 @@ function openPopout() {
 
   const r = new Renderer(c);
   popoutWin._renderer = r;
+  r.onFps = fpsHandler;
   r.compile(editor.getValue());
   r.start();
 
