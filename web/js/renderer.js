@@ -105,6 +105,19 @@ export default class Renderer {
     return shader;
   }
 
+  /** Immediately resize the canvas pixel buffer to match its CSS size. */
+  resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.clientWidth * dpr | 0;
+    const h = this.canvas.clientHeight * dpr | 0;
+    if (w === 0 || h === 0) return;
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+    if (this._paused) this._draw();
+  }
+
   /** Start the render loop */
   start() {
     if (this._animId) return;

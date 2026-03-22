@@ -24,7 +24,7 @@ const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light col
 const float SPIN_SPEED          = 8.6;   // primary rotation speed (deg/s)
 const float SPIN_RATIO          = 0.6;   // secondary axis speed as fraction of primary
 const float SPIN_ANGLE1         = 90.0;  // initial angle of primary axis (degrees)
-const float SPIN_ANGLE2         = 153.0; // initial angle of secondary axis (degrees)
+const float SPIN_ANGLE2         = 150.0; // initial angle of secondary axis (degrees)
 const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
 // @lil-gui-end
 

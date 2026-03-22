@@ -80,7 +80,7 @@ initSplitter(
   document.getElementById("hsplit"),
   document.getElementById("preview-pane"),
   document.getElementById("editor-pane"),
-  () => editor.layout(),
+  () => { renderer.resize(); editor.layout(); },
 );
 
 // ── Toolbar ───────────────────────────────────────────────

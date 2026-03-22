@@ -149,6 +149,15 @@ function prettyName(name) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+/**
+ * Strip the leading PREFIX_ from a name, then pretty-print.
+ * e.g. strippedLabel("STAR_EDGE_WIDTH", "STAR") → "Edge Width"
+ */
+function strippedLabel(name, prefix) {
+  if (name.startsWith(prefix + "_")) return prettyName(name.slice(prefix.length + 1));
+  return prettyName(name);
+}
+
 export default class ShaderTuner {
   /**
    * @param {HTMLElement} container — DOM element to hold the lil-gui panel
@@ -181,19 +190,39 @@ export default class ShaderTuner {
     this._gui.title("Shader Controls");
     this._proxyObj = {};
 
+    // Group consecutive constants by first prefix (e.g. STAR from STAR_SIZE)
+    const groups = [];
     for (const p of this._parsed) {
-      this._addControl(p);
+      const prefix = p.name.split("_")[0];
+      const last = groups[groups.length - 1];
+      if (last && last.prefix === prefix) {
+        last.items.push(p);
+      } else {
+        groups.push({ prefix, items: [p] });
+      }
+    }
+
+    for (const group of groups) {
+      if (group.items.length > 1) {
+        const folder = this._gui.addFolder(prettyName(group.prefix));
+        for (const p of group.items) {
+          this._addControl(p, folder, group.prefix);
+        }
+      } else {
+        this._addControl(group.items[0], this._gui, null);
+      }
     }
   }
 
-  _addControl(p) {
-    const gui = this._gui;
-
+  /** Add one control to `parent` (a GUI or folder).
+   *  `prefix` is stripped from the label when inside a prefix folder. */
+  _addControl(p, parent, prefix) {
+    const label = prefix ? strippedLabel(p.name, prefix) : prettyName(p.name);
     const tip = p.comment ? p.comment.replace(/^\/\/\s*/, "").trim() : "";
 
     if (p.type === "bool") {
       this._proxyObj[p.name] = p.value;
-      const c = gui.add(this._proxyObj, p.name).name(prettyName(p.name))
+      const c = parent.add(this._proxyObj, p.name).name(label)
         .onChange(() => this._apply(p));
       if (tip) c.domElement.setAttribute("title", tip);
       return;
@@ -202,36 +231,32 @@ export default class ShaderTuner {
     if (p.type === "float") {
       this._proxyObj[p.name] = p.value;
       const range = getRange(p.name, p.value);
-      const c = gui.add(this._proxyObj, p.name, range.min, range.max, range.step)
-        .name(prettyName(p.name))
+      const c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
+        .name(label)
         .onChange(() => this._apply(p));
       if (tip) c.domElement.setAttribute("title", tip);
       return;
     }
 
-    // vec4 color: rgb picker + alpha slider
+    // vec4 color: inline color picker + opacity slider (no sub-folder)
     if (p.type === "vec4" && isColor(p.name)) {
-      const folder = gui.addFolder(prettyName(p.name));
-      if (tip) folder.domElement.setAttribute("title", tip);
       const colorKey = p.name + "__rgb";
       const alphaKey = p.name + "__a";
-      this._proxyObj[colorKey] = {
-        r: p.value[0],
-        g: p.value[1],
-        b: p.value[2],
-      };
+      this._proxyObj[colorKey] = { r: p.value[0], g: p.value[1], b: p.value[2] };
       this._proxyObj[alphaKey] = p.value[3];
-      folder.addColor(this._proxyObj, colorKey).name("Color")
+      const cc = parent.addColor(this._proxyObj, colorKey).name(label)
         .onChange(() => this._applyColor(p));
-      folder.add(this._proxyObj, alphaKey, 0, 1, 0.01).name("Opacity")
+      if (tip) cc.domElement.setAttribute("title", tip);
+      const alphaLabel = label.replace(/Color$/, "Alpha").trim() || "Alpha";
+      parent.add(this._proxyObj, alphaKey, 0, 1, 0.01).name(alphaLabel)
         .onChange(() => this._applyColor(p));
       return;
     }
 
-    // vec3/vec4 direction or generic — individual sliders
+    // vec3/vec4 — sub-folder with component sliders
     const dim = parseInt(p.type.charAt(3));
     const labels = ["x", "y", "z", "w"].slice(0, dim);
-    const folder = gui.addFolder(prettyName(p.name));
+    const folder = parent.addFolder(label);
     if (tip) folder.domElement.setAttribute("title", tip);
 
     for (let i = 0; i < dim; i++) {
