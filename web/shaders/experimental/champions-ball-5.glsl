@@ -7,19 +7,20 @@ uniform float u_time;
 #define TAU 6.28318530
 
 // ── Tweakable constants ────────────────────────────────────
-const float STAR_SIZE       = 1.6;   // 1.0 = default, larger = bigger stars
-const float STAR_TIP_ANGLE  = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
-const vec4  STAR_COLOR       = vec4(0.3059, 0.4588, 1.0, 5.0);     // star interior (rgb + intensity)
-const float STAR_EDGE_WIDTH = 0.1;   // 1.0 = default, larger = thicker neon edges
-const vec4  STAR_EDGE_COLOR = vec4(0.5059, 0.8196, 1.0, 1.0);   // star edge glow (rgb + intensity)
-const vec4  SPHERE_COLOR    = vec4(0.005, 0.012, 0.035, 1.0); // sphere base (rgb + intensity)
-const float SPHERE_GLOSS    = 200.0;  // specular exponent (higher = sharper highlight)
-const float SPHERE_REFLECT  = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
-const vec3  LIGHT_DIR       = vec3(1.5, 2.0, -2.0); // point light direction (world space)
-const vec4  LIGHT_DIFFUSE   = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
-const float SPHERE_OPACITY  = 0.8;  // 0.0 = fully transparent, 1.0 = fully opaque
-const float SPHERE_SIZE     = 1.3;   // sphere size factor (1.0 = default)
-const float STAR_OPACITY    = 0.9;  // 0.0 = fully transparent, 1.0 = fully opaque
+const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
+const float STAR_TIP_ANGLE      = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
+const vec4  STAR_COLOR          = vec4(0.3059, 0.4588, 1.0, 0.95); // star color (rgb + opacity)
+const float STAR_INTENSITY      = 5.0;                              // star fill brightness multiplier
+const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
+const vec4  STAR_EDGE_COLOR     = vec4(0.5059, 0.8196, 1.0, 1.0); // edge color (rgb + opacity)
+const float STAR_EDGE_INTENSITY = 1.0;                              // edge glow brightness multiplier
+const vec4  SPHERE_COLOR        = vec4(0.005, 0.012, 0.035, 0.8); // sphere color (rgb + opacity)
+const float SPHERE_INTENSITY    = 1.0;                              // sphere brightness multiplier
+const float SPHERE_GLOSS        = 200.0;  // specular exponent (higher = sharper highlight)
+const float SPHERE_REFLECT      = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
+const float SPHERE_SIZE         = 1.3;   // sphere size factor (1.0 = default)
+const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0); // point light direction (world space)
+const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
@@ -119,7 +120,7 @@ float starsPattern(vec3 n) {
 
 // ── Neon colours ───────────────────────────────────────────
 vec3 edgeRGB = STAR_EDGE_COLOR.rgb;
-float edgeI  = STAR_EDGE_COLOR.a;
+float edgeI  = STAR_EDGE_INTENSITY;
 
 // ── Shade one sphere hit point ─────────────────────────────
 // Returns vec4(rgb, alpha) for compositing
@@ -142,12 +143,12 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
 
     // Base sphere
-    vec3 baseCol = SPHERE_COLOR.rgb * SPHERE_COLOR.a;
+    vec3 baseCol = SPHERE_COLOR.rgb * SPHERE_INTENSITY;
     baseCol *= (0.15 + diffLight);
 
     // Star fill with intensity for bright whites
-    vec3 starCol = STAR_COLOR.rgb * STAR_COLOR.a * (0.3 + diff * 0.7);
-    starCol += STAR_COLOR.rgb * spec * STAR_COLOR.a * 0.4;
+    vec3 starCol = STAR_COLOR.rgb * STAR_INTENSITY * (0.3 + diff * 0.7);
+    starCol += STAR_COLOR.rgb * spec * STAR_INTENSITY * 0.4;
 
     vec3 surfCol = mix(baseCol, starCol, insideStar);
 
@@ -170,7 +171,7 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     surfCol *= 1.0 + 0.05 * sin(u_time * 2.0);
 
     // Alpha
-    float surfAlpha = mix(SPHERE_OPACITY, STAR_OPACITY, insideStar);
+    float surfAlpha = mix(SPHERE_COLOR.a, STAR_COLOR.a, insideStar);
     return vec4(surfCol, surfAlpha);
 }
 
