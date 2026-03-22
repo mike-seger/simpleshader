@@ -37,139 +37,42 @@ vec2 iSphere(vec3 ro, vec3 rd, float r) {
     return vec2(-b - h, -b + h);
 }
 
-// ── Champions League star arrangement ──────────────────────
-// 8 stars arranged in a ring, tips touching, on the surface of a sphere.
-// We use stereographic/spherical projection.
+// ── Golden ratio for dodecahedron geometry ─────────────────
+const float phi = 1.618033988749895;
 
+// 12 face centers of a dodecahedron (star centers)
+vec3 getStarCenter(int idx) {
+    if (idx == 0) return normalize(vec3( phi,  1.0,  0.0));
+    if (idx == 1) return normalize(vec3( phi, -1.0,  0.0));
+    if (idx == 2) return normalize(vec3(-phi,  1.0,  0.0));
+    if (idx == 3) return normalize(vec3(-phi, -1.0,  0.0));
+    if (idx == 4) return normalize(vec3( 1.0,  0.0,  phi));
+    if (idx == 5) return normalize(vec3( 1.0,  0.0, -phi));
+    if (idx == 6) return normalize(vec3(-1.0,  0.0,  phi));
+    if (idx == 7) return normalize(vec3(-1.0,  0.0, -phi));
+    if (idx == 8) return normalize(vec3( 0.0,  phi,  1.0));
+    if (idx == 9) return normalize(vec3( 0.0,  phi, -1.0));
+    if (idx == 10) return normalize(vec3( 0.0, -phi,  1.0));
+    return normalize(vec3( 0.0, -phi, -1.0));
+}
+
+// ── Champions League star arrangement ──────────────────────
 float starsPattern(vec3 n) {
-    // Slow tumble
     float t = u_time * 0.15;
     n.xz *= rot(t);
     n.xy *= rot(t * 0.6);
 
-    // Convert to spherical coords
-    float theta = acos(clamp(n.y, -1.0, 1.0));  // 0..PI (pole to pole)
-    float phi   = atan(n.z, n.x);                // -PI..PI
-
-    // We place 8 stars in a ring at the equator (theta ≈ PI/2)
-    // and the pattern wraps around the sphere giving the CL look.
-
-    // For a proper sphere-covering pattern:
-    // Use the angular coords, tile 8 stars around the equator,
-    // plus 1 star at each pole, for a total arrangement that
-    // covers the sphere with touching star tips.
-
     float d = 1e9;
 
-    // Number of stars in the equatorial ring
-    float N = 8.0;
-    float starAngularSize = PI / N;  // angular half-spacing
-
-    // Equatorial ring of 8 stars
-    for (int i = 0; i < 8; i++) {
-        float fi = float(i);
-        // Centre of this star on the sphere
-        float cPhi   = fi * TAU / N;
-        float cTheta = PI * 0.5;  // equator
-
-        // Star centre direction
-        vec3 cDir = vec3(
-            sin(cTheta) * cos(cPhi),
-            cos(cTheta),
-            sin(cTheta) * sin(cPhi)
-        );
+    for (int i = 0; i < 12; i++) {
+        vec3 cDir = getStarCenter(i);
 
         // Build tangent frame at star centre
-        vec3 up = vec3(0.0, 1.0, 0.0);
-        vec3 tU = normalize(cross(up, cDir));
-        vec3 tV = cross(cDir, tU);
+        vec3 upRef = abs(cDir.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+        vec3 tU = normalize(cross(upRef, cDir));
+        vec3 tV = normalize(cross(cDir, tU));
 
-        // Gnomonic projection of n onto tangent plane
-        float cosA = dot(n, cDir);
-        if (cosA > 0.1) {
-            vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            // Scale so star tips just reach the neighbours
-            lp *= 2.6;
-            // Rotate alternating stars so tips interlock
-            lp *= rot(fi * PI / N);
-            float sd = sdStar5(lp, 1.0, 0.38);
-            d = min(d, sd);
-        }
-    }
-
-    // Top cap: 4 stars at ~40° from north pole
-    for (int i = 0; i < 4; i++) {
-        float fi = float(i);
-        float cPhi   = fi * TAU / 4.0 + PI / 8.0; // offset from equatorial
-        float cTheta = 0.55;  // ~31° from pole
-
-        vec3 cDir = vec3(
-            sin(cTheta) * cos(cPhi),
-            cos(cTheta),
-            sin(cTheta) * sin(cPhi)
-        );
-
-        vec3 up = vec3(0.0, 1.0, 0.0);
-        if (abs(dot(normalize(cDir), up)) > 0.99) up = vec3(1.0, 0.0, 0.0);
-        vec3 tU = normalize(cross(up, cDir));
-        vec3 tV = cross(cDir, tU);
-
-        float cosA = dot(n, cDir);
-        if (cosA > 0.1) {
-            vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            lp *= 2.6;
-            lp *= rot(fi * PI / 4.0 + 0.4);
-            float sd = sdStar5(lp, 1.0, 0.38);
-            d = min(d, sd);
-        }
-    }
-
-    // Bottom cap: 4 stars at ~40° from south pole
-    for (int i = 0; i < 4; i++) {
-        float fi = float(i);
-        float cPhi   = fi * TAU / 4.0 + PI / 8.0;
-        float cTheta = PI - 0.55;
-
-        vec3 cDir = vec3(
-            sin(cTheta) * cos(cPhi),
-            cos(cTheta),
-            sin(cTheta) * sin(cPhi)
-        );
-
-        vec3 up = vec3(0.0, 1.0, 0.0);
-        if (abs(dot(normalize(cDir), up)) > 0.99) up = vec3(1.0, 0.0, 0.0);
-        vec3 tU = normalize(cross(up, cDir));
-        vec3 tV = cross(cDir, tU);
-
-        float cosA = dot(n, cDir);
-        if (cosA > 0.1) {
-            vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            lp *= 2.6;
-            lp *= rot(-fi * PI / 4.0 - 0.4);
-            float sd = sdStar5(lp, 1.0, 0.38);
-            d = min(d, sd);
-        }
-    }
-
-    // Pole stars
-    // North pole
-    {
-        vec3 cDir = vec3(0.0, 1.0, 0.0);
-        vec3 tU = vec3(1.0, 0.0, 0.0);
-        vec3 tV = vec3(0.0, 0.0, 1.0);
-        float cosA = dot(n, cDir);
-        if (cosA > 0.1) {
-            vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            lp *= 2.6;
-            float sd = sdStar5(lp, 1.0, 0.38);
-            d = min(d, sd);
-        }
-    }
-    // South pole
-    {
-        vec3 cDir = vec3(0.0, -1.0, 0.0);
-        vec3 tU = vec3(1.0, 0.0, 0.0);
-        vec3 tV = vec3(0.0, 0.0, -1.0);
+        // Gnomonic projection
         float cosA = dot(n, cDir);
         if (cosA > 0.1) {
             vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
