@@ -7,6 +7,7 @@ import Editor from "./editor.js";
 import Sidebar from "./sidebar.js";
 import { initSplitter } from "./splitter.js";
 import { upsertCustomShader, loadCustomShaders } from "./store.js";
+import ShaderTuner from "./shader-tuner.js";
 
 // ── DOM refs ──────────────────────────────────────────────
 const canvas        = document.getElementById("glcanvas");
@@ -24,6 +25,10 @@ const btnDownload   = document.getElementById("btn-download");
 const btnDuplicate  = document.getElementById("btn-duplicate");
 const btnDelete     = document.getElementById("btn-delete");
 const sidebarList   = document.getElementById("sidebar-list");
+const btnModeList   = document.getElementById("btn-mode-list");
+const btnModeTune   = document.getElementById("btn-mode-tune");
+const sidebarTuner  = document.getElementById("sidebar-tuner");
+const tunerContainer = document.getElementById("tuner-container");
 
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
@@ -107,7 +112,35 @@ btnToggleList.addEventListener("click", () => {
   btnDownload.classList.toggle("hidden", hidden);
   btnDuplicate.classList.toggle("hidden", hidden);
   btnDelete.classList.toggle("hidden", hidden);
+  // Also hide tuner when sidebar is hidden
+  if (hidden) sidebarTuner.classList.add("hidden");
+  else if (btnModeTune.classList.contains("active")) sidebarTuner.classList.remove("hidden");
 });
+
+// ── Mode switching (List / Tune) ──────────────────────────
+const tuner = new ShaderTuner(
+  tunerContainer,
+  () => editor.getValue(),
+  (source) => {
+    editor.setValue(source);
+    if (currentName) sidebar.saveToCustom(currentName, source);
+    const err = activeRenderer().compile(source, true);
+    if (err) showError(err); else hideError();
+  },
+);
+
+function setMode(mode) {
+  const isTune = mode === "tune";
+  btnModeList.classList.toggle("active", !isTune);
+  btnModeTune.classList.toggle("active", isTune);
+  sidebarList.classList.toggle("hidden", isTune);
+  sidebarTuner.classList.toggle("hidden", !isTune);
+  document.body.classList.toggle("mode-tune", isTune);
+  if (isTune) tuner.build();
+}
+
+btnModeList.addEventListener("click", () => setMode("list"));
+btnModeTune.addEventListener("click", () => setMode("tune"));
 
 btnNew.addEventListener("click", () => sidebar.createNew());
 btnDownload.addEventListener("click", downloadCustomShaders);
@@ -226,7 +259,10 @@ function hideError() {
 // ── Pop-out preview ───────────────────────────────────────
 
 const previewPane = document.getElementById("preview-pane");
+const editorPane  = document.getElementById("editor-pane");
 const hsplit = document.getElementById("hsplit");
+let _savedEditorFlex = "";
+let _savedEditorHeight = "";
 
 // ── Download custom shaders as ZIP ────────────────────────
 let jsZipPromise;
@@ -263,6 +299,11 @@ function openPopout() {
   renderer.stop();
   previewPane.style.display = "none";
   hsplit.style.display = "none";
+  // Let editor fill the full height
+  _savedEditorFlex = editorPane.style.flex;
+  _savedEditorHeight = editorPane.style.height;
+  editorPane.style.flex = "1";
+  editorPane.style.height = "";
   btnPopout.classList.add("active");
   editor.layout();
 
@@ -321,6 +362,8 @@ function closePopout() {
 function restoreEmbedded() {
   previewPane.style.display = "";
   hsplit.style.display = "";
+  editorPane.style.flex = _savedEditorFlex;
+  editorPane.style.height = _savedEditorHeight;
   // Recompile current source into embedded renderer so it's in sync
   renderer.compile(editor.getValue());
   renderer.start();

@@ -41,8 +41,9 @@ export default class Renderer {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
   }
 
-  /** Compile & link a fragment shader source. Returns error string or null. */
-  compile(fragSrc) {
+  /** Compile & link a fragment shader source. Returns error string or null.
+   *  @param {boolean} [keepTime=false] — preserve u_time across recompile */
+  compile(fragSrc, keepTime) {
     const gl = this.gl;
 
     // Enable extensions that shaders may request
@@ -81,7 +82,7 @@ export default class Renderer {
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
     this._error = null;
-    this._startTime = performance.now();
+    if (!keepTime) this._startTime = performance.now();
     // Draw one frame immediately so new shader is visible even when paused
     if (this._paused) {
       this._draw();

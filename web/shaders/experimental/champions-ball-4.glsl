@@ -6,9 +6,10 @@ uniform float u_time;
 #define PI  3.14159265
 
 // ── Tweakable constants ────────────────────────────────────
+// @lil-gui-start
 const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_INNER_RATIO    = 0.39;  // inner/outer corner radius ratio (0.38 = sharp star, 1.0 = decagon)
-const vec4  STAR_COLOR          = vec4(0.3059, 0.4588, 1.0, 0.95); // star color (rgb + opacity)
+const vec4  STAR_COLOR          = vec4(0.3137, 0.3529, 1.0, 0.95); // star color (rgb + opacity)
 const float STAR_INTENSITY      = 5.0;                              // star fill brightness multiplier
 const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
 const vec4  STAR_EDGE_COLOR     = vec4(0.5059, 0.8196, 1.0, 1.0); // edge color (rgb + opacity)
@@ -18,9 +19,9 @@ const float SPHERE_INTENSITY    = 1.0;                              // sphere br
 const float SPHERE_GLOSS        = 200.0;  // specular exponent (higher = sharper highlight)
 const float SPHERE_REFLECT      = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
 const float SPHERE_SIZE         = 1.3;   // sphere size factor (1.0 = default)
-const float PROJ_SCALE          = 2.6 / STAR_SIZE; // gnomonic projection scale
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0); // point light direction (world space)
 const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
+// @lil-gui-end
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
@@ -108,7 +109,7 @@ float starsPattern(vec3 n) {
         float cosA = dot(n, cDir);
         if (cosA > 0.1) {
             vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            lp *= PROJ_SCALE;
+            lp *= 2.6 / STAR_SIZE;
             lp *= rot(getStarRotation(i));
             float sd = sdStar5(lp, 1.0, STAR_INNER_RATIO);
             d = min(d, sd);

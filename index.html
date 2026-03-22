@@ -11,10 +11,14 @@
   <aside id="sidebar">
     <div id="sidebar-icons">
       <button class="sb-icon" id="btn-toggle-list" title="Toggle shader list">left_panel_close</button>
-      <button class="sb-icon" id="btn-new" title="New shader">add</button>
-      <button class="sb-icon" id="btn-download" title="Download custom shaders">download</button>
-      <button class="sb-icon" id="btn-duplicate" title="Duplicate shader">content_copy</button>
-      <button class="sb-icon" id="btn-delete" title="Delete custom shader">delete</button>
+      <div class="sb-separator"></div>
+      <button class="sb-icon sb-mode active" id="btn-mode-list" title="Shader list">list_alt</button>
+      <button class="sb-icon sb-mode" id="btn-mode-tune" title="Tune shader">tune</button>
+      <div class="sb-separator sb-shader-action"></div>
+      <button class="sb-icon sb-shader-action" id="btn-new" title="New shader">add</button>
+      <button class="sb-icon sb-shader-action" id="btn-download" title="Download custom shaders">download</button>
+      <button class="sb-icon sb-shader-action" id="btn-duplicate" title="Duplicate shader">content_copy</button>
+      <button class="sb-icon sb-shader-action" id="btn-delete" title="Delete custom shader">delete</button>
       <div class="sb-separator"></div>
       <button class="sb-icon" id="btn-debug" title="Toggle debug overlay">bug_report</button>
       <button class="sb-icon" id="btn-popout" title="Pop-out preview">open_in_new</button>
@@ -22,6 +26,10 @@
     <div id="sidebar-list">
       <div class="sidebar-header">Shaders</div>
       <nav id="shader-tree"></nav>
+    </div>
+    <div id="sidebar-tuner" class="hidden">
+      <div class="sidebar-header">Shader Controls</div>
+      <div id="tuner-container"></div>
     </div>
   </aside>
 

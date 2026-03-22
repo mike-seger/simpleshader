@@ -247,3 +247,25 @@ body {
 ::-webkit-scrollbar-track { background: #1e1e1e; }
 ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #777; }
+
+/* ── Tuner panel (lil-gui host) ────────────────────────── */
+#sidebar-tuner {
+  width: 210px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#sidebar-tuner.hidden { display: none; }
+#tuner-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+/* Override lil-gui sizing to fit sidebar */
+#tuner-container .lil-gui { --width: 100%; width: 100% !important; }
+#tuner-container .lil-gui.root { width: 100% !important; }
+#tuner-container > .lil-gui > .title { display: none; }
+
+/* Tune mode: hide shader action icons */
+body.mode-tune .sb-shader-action { display: none !important; }
