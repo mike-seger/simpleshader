@@ -7,7 +7,7 @@ uniform float u_time;
 
 // ── Tweakable constants ────────────────────────────────────
 const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
-const float STAR_TIP_ANGLE      = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
+const float STAR_INNER_RATIO    = 0.39;  // inner/outer corner radius ratio (0.38 = sharp star, 1.0 = decagon)
 const vec4  STAR_COLOR          = vec4(0.3059, 0.4588, 1.0, 0.95); // star color (rgb + opacity)
 const float STAR_INTENSITY      = 5.0;                              // star fill brightness multiplier
 const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
@@ -110,7 +110,7 @@ float starsPattern(vec3 n) {
             vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
             lp *= PROJ_SCALE;
             lp *= rot(getStarRotation(i));
-            float sd = sdStar5(lp, 1.0, STAR_TIP_ANGLE);
+            float sd = sdStar5(lp, 1.0, STAR_INNER_RATIO);
             d = min(d, sd);
         }
     }
