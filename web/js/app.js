@@ -15,6 +15,7 @@ const errorOverlay  = document.getElementById("error-overlay");
 const debugBox      = document.getElementById("debug-box");
 const fpsDisplay    = document.getElementById("fps-display");
 const timeDisplay   = document.getElementById("time-display");
+const resDisplay    = document.getElementById("res-display");
 const btnApply      = document.getElementById("btn-apply");
 const btnPlayPause  = document.getElementById("btn-playpause");
 const btnDebug      = document.getElementById("btn-debug");
@@ -48,10 +49,14 @@ function fpsHandler(fps) {
     String(mins).padStart(2, "0") + ":" +
     String(secs).padStart(2, "0");
   timeDisplay.textContent = timeStr;
+  const activeCanvas = activeRenderer().canvas;
+  const resStr = activeCanvas.width + "\xD7" + activeCanvas.height;
+  resDisplay.textContent = resStr;
   // Mirror to pop-out
   if (popoutWin && !popoutWin.closed && popoutWin._fpsEl) {
     popoutWin._fpsEl.textContent = fps + " FPS";
     popoutWin._timeEl.textContent = timeStr;
+    if (popoutWin._resEl) popoutWin._resEl.textContent = resStr;
   }
 }
 renderer.onFps = fpsHandler;
@@ -85,6 +90,7 @@ btnPlayPause.addEventListener("click", () => {
   const r = activeRenderer();
   r.togglePause();
   btnPlayPause.textContent = r.paused ? "play_arrow" : "pause";
+  localStorage.setItem("simpleshader_paused", r.paused ? "1" : "0");
 });
 
 // ── Icon bar ──────────────────────────────────────────────
@@ -318,12 +324,15 @@ function openPopout() {
   dbg.style.cssText = "position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#0f0;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:5;pointer-events:none;display:none";
   const fpsEl = doc.createElement("div");
   const timeEl = doc.createElement("div");
+  const resEl = doc.createElement("div");
   dbg.appendChild(fpsEl);
   dbg.appendChild(timeEl);
+  dbg.appendChild(resEl);
   doc.body.appendChild(dbg);
   popoutWin._debugBox = dbg;
   popoutWin._fpsEl = fpsEl;
   popoutWin._timeEl = timeEl;
+  popoutWin._resEl = resEl;
   // Sync current debug visibility
   dbg.style.display = debugVisible ? "" : "none";
 
@@ -386,4 +395,10 @@ window.addEventListener("beforeunload", () => {
 const lastKey = localStorage.getItem("simpleshader_last");
 if (!lastKey || !sidebar.selectByKey(lastKey)) {
   sidebar.selectFirst();
+}
+
+// Restore paused state
+if (localStorage.getItem("simpleshader_paused") === "1") {
+  renderer.togglePause();
+  btnPlayPause.textContent = "play_arrow";
 }

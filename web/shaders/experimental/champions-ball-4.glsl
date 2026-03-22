@@ -10,17 +10,22 @@ uniform float u_time;
 const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_INNER_RATIO    = 0.39;  // inner/outer corner radius ratio (0.38 = sharp star, 1.0 = decagon)
 const vec4  STAR_COLOR          = vec4(0.3137, 0.3529, 1.0, 0.95); // star color (rgb + opacity)
-const float STAR_INTENSITY      = 5.0;                              // star fill brightness multiplier
+const float STAR_INTENSITY      = 5.0;   // star fill brightness multiplier
 const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
 const vec4  STAR_EDGE_COLOR     = vec4(0.5059, 0.8196, 1.0, 1.0); // edge color (rgb + opacity)
-const float STAR_EDGE_INTENSITY = 1.0;                              // edge glow brightness multiplier
+const float STAR_EDGE_INTENSITY = 1.0;   // edge glow brightness multiplier
 const vec4  SPHERE_COLOR        = vec4(0.005, 0.012, 0.035, 0.8); // sphere color (rgb + opacity)
-const float SPHERE_INTENSITY    = 1.0;                              // sphere brightness multiplier
-const float SPHERE_GLOSS        = 200.0;  // specular exponent (higher = sharper highlight)
+const float SPHERE_INTENSITY    = 1.0;   // sphere brightness multiplier
+const float SPHERE_GLOSS        = 200.0; // specular exponent (higher = sharper highlight)
 const float SPHERE_REFLECT      = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
 const float SPHERE_SIZE         = 1.3;   // sphere size factor (1.0 = default)
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0); // point light direction (world space)
 const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
+const float SPIN_SPEED          = 8.6;   // primary rotation speed (deg/s)
+const float SPIN_RATIO          = 0.6;   // secondary axis speed as fraction of primary
+const float SPIN_ANGLE1         = 90.0;  // initial angle of primary axis (degrees)
+const float SPIN_ANGLE2         = 153.0; // initial angle of secondary axis (degrees)
+const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
 // @lil-gui-end
 
 mat2 rot(float a) {
@@ -91,9 +96,9 @@ float getStarRotation(int idx) {
 
 // ── Champions League star arrangement ──────────────────────
 float starsPattern(vec3 n) {
-    float t = u_time * 0.15;
-    n.xz *= rot(t);
-    n.xy *= rot(t * 0.6);
+    float t = u_time * SPIN_SPEED * (PI / 180.0);
+    n.xz *= rot(t + SPIN_ANGLE1 * (PI / 180.0));
+    n.xy *= rot(t * SPIN_RATIO + SPIN_ANGLE2 * (PI / 180.0));
 
     float d = 1e9;
 
@@ -170,7 +175,7 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     surfCol += edgeRGB * silhouette * edgeI * 0.3;
 
     // Pulse
-    surfCol *= 1.0 + 0.05 * sin(u_time * 2.0);
+    surfCol *= 1.0 + 0.05 * sin(u_time * PULSE_FREQ);
 
     // Alpha
     float surfAlpha = mix(SPHERE_COLOR.a, STAR_COLOR.a, insideStar);

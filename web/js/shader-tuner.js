@@ -79,6 +79,9 @@ function getRange(name, value) {
   if (n.includes("INTENSITY")) return { min: 0, max: 20, step: 0.1 };
   if (n.includes("GLOSS")) return { min: 1, max: 500, step: 1 };
   if (n.includes("WIDTH")) return { min: 0.01, max: 3, step: 0.01 };
+  if (n.includes("ANGLE")) return { min: -360, max: 360, step: 1 };
+  if (n.includes("SPEED")) return { min: -360, max: 360, step: 0.5 };
+  if (n.includes("FREQ"))  return { min: 0, max: 20, step: 0.1 };
   // Default: center on current value
   const absV = Math.abs(value);
   if (absV < 0.001) return { min: -1, max: 1, step: 0.001 };
@@ -186,25 +189,30 @@ export default class ShaderTuner {
   _addControl(p) {
     const gui = this._gui;
 
+    const tip = p.comment ? p.comment.replace(/^\/\/\s*/, "").trim() : "";
+
     if (p.type === "bool") {
       this._proxyObj[p.name] = p.value;
-      gui.add(this._proxyObj, p.name).name(prettyName(p.name))
+      const c = gui.add(this._proxyObj, p.name).name(prettyName(p.name))
         .onChange(() => this._apply(p));
+      if (tip) c.domElement.setAttribute("title", tip);
       return;
     }
 
     if (p.type === "float") {
       this._proxyObj[p.name] = p.value;
       const range = getRange(p.name, p.value);
-      gui.add(this._proxyObj, p.name, range.min, range.max, range.step)
+      const c = gui.add(this._proxyObj, p.name, range.min, range.max, range.step)
         .name(prettyName(p.name))
         .onChange(() => this._apply(p));
+      if (tip) c.domElement.setAttribute("title", tip);
       return;
     }
 
     // vec4 color: rgb picker + alpha slider
     if (p.type === "vec4" && isColor(p.name)) {
       const folder = gui.addFolder(prettyName(p.name));
+      if (tip) folder.domElement.setAttribute("title", tip);
       const colorKey = p.name + "__rgb";
       const alphaKey = p.name + "__a";
       this._proxyObj[colorKey] = {
@@ -224,6 +232,7 @@ export default class ShaderTuner {
     const dim = parseInt(p.type.charAt(3));
     const labels = ["x", "y", "z", "w"].slice(0, dim);
     const folder = gui.addFolder(prettyName(p.name));
+    if (tip) folder.domElement.setAttribute("title", tip);
 
     for (let i = 0; i < dim; i++) {
       const key = p.name + "__" + labels[i];
