@@ -9,7 +9,7 @@ uniform float u_time;
 // ── Tweakable constants ────────────────────────────────────
 const float STAR_SIZE       = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_TIP_ANGLE  = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
-const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 5.0);     // star interior (rgb + intensity)
+const vec4  STAR_COLOR       = vec4(0.3059, 0.4588, 1.0, 5.0);     // star interior (rgb + intensity)
 const float STAR_EDGE_WIDTH = 0.1;   // 1.0 = default, larger = thicker neon edges
 const vec4  STAR_EDGE_COLOR = vec4(0.5059, 0.8196, 1.0, 1.0);   // star edge glow (rgb + intensity)
 const vec4  SPHERE_COLOR    = vec4(0.005, 0.012, 0.035, 1.0); // sphere base (rgb + intensity)
@@ -146,8 +146,8 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     baseCol *= (0.15 + diffLight);
 
     // Star fill with intensity for bright whites
-    vec3 starCol = STAR_FILL.rgb * STAR_FILL.a * (0.3 + diff * 0.7);
-    starCol += STAR_FILL.rgb * spec * STAR_FILL.a * 0.4;
+    vec3 starCol = STAR_COLOR.rgb * STAR_COLOR.a * (0.3 + diff * 0.7);
+    starCol += STAR_COLOR.rgb * spec * STAR_COLOR.a * 0.4;
 
     vec3 surfCol = mix(baseCol, starCol, insideStar);
 
