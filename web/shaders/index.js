@@ -25,6 +25,8 @@ const SHADER_INDEX = [
       { name: "Flowing Ribbons", path: "web/shaders/shadertoy/flowing-ribbons.glsl" },
       { name: "Irridescent Ribbons", path: "web/shaders/shadertoy/irridescent-ribbons.glsl" },
       { name: "Ribbon Waves", path: "web/shaders/shadertoy/ribbon-waves.glsl" },
+      { name: "Total Noob (loading Ring)", path: "web/shaders/shadertoy/total noob (loading ring).glsl" },
+      { name: "Total Noob", path: "web/shaders/shadertoy/total-noob.glsl" },
       { name: "Vertical Ribbin", path: "web/shaders/shadertoy/vertical-ribbin.glsl" },
     ],
   },
