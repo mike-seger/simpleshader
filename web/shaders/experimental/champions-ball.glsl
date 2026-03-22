@@ -9,16 +9,13 @@ uniform float u_time;
 // ── Tweakable constants ────────────────────────────────────
 const float STAR_SIZE       = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_TIP_ANGLE  = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
-const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 5.0);     // star interior (rgb + intensity)
-const float STAR_EDGE_WIDTH = 0.1;   // 1.0 = default, larger = thicker neon edges
-const vec4  STAR_EDGE_COLOR = vec4(0.5059, 0.8196, 1.0, 1.0);   // star edge glow (rgb + intensity)
+const float EDGE_WIDTH      = 0.3;   // 1.0 = default, larger = thicker neon edges
+const bool  SHOW_LABELS     = false; // show star index dot counts
+const vec4  STAR_FILL       = vec4(1.0, 1.0, 1.0, 4.0);     // star interior (rgb + intensity)
+const vec4  STAR_EDGE_COLOR = vec4(0.05, 0.65, 1.0, 1);   // star edge glow (rgb + intensity)
 const vec4  SPHERE_COLOR    = vec4(0.005, 0.012, 0.035, 1.0); // sphere base (rgb + intensity)
-const float SPHERE_GLOSS    = 200.0;  // specular exponent (higher = sharper highlight)
-const float SPHERE_REFLECT  = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
-const vec3  LIGHT_DIR       = vec3(1.5, 2.0, -2.0); // point light direction (world space)
-const vec4  LIGHT_DIFFUSE   = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
-const float SPHERE_OPACITY  = 0.8;  // 0.0 = fully transparent, 1.0 = fully opaque
-const float SPHERE_SIZE     = 1.3;   // sphere size factor (1.0 = default)
+const float SPHERE_SIZE     = 1.0;   // sphere size factor (1.0 = default)
+const float SPHERE_OPACITY  = 0.97;  // 0.0 = fully transparent, 1.0 = fully opaque
 const float STAR_OPACITY    = 0.9;  // 0.0 = fully transparent, 1.0 = fully opaque
 
 mat2 rot(float a) {
@@ -40,6 +37,28 @@ float sdStar5(vec2 p, float r, float rf) {
     vec2 d = q - tip;
     d -= e * clamp(dot(d, e) / dot(e, e), 0.0, 1.0);
     return length(d) * sign(d.x);
+}
+
+// ── Dot-grid label (3 rows × 4 cols) ──────────────────────
+// Draws n dots (0–12) in rows of up to 4, centered.
+float drawDots(float n, vec2 p, float dotR, float spacing) {
+    float row0 = min(n, 4.0);
+    float row1 = min(max(n - 4.0, 0.0), 4.0);
+    float row2 = max(n - 8.0, 0.0);
+    float result = 0.0;
+    for (int r = 0; r < 3; r++) {
+        float count = r == 0 ? row0 : (r == 1 ? row1 : row2);
+        if (count < 0.5) continue;
+        float cy = (1.0 - float(r)) * spacing;
+        float xStart = -(count - 1.0) * 0.5 * spacing;
+        for (int c = 0; c < 4; c++) {
+            if (float(c) >= count) break;
+            float cx = xStart + float(c) * spacing;
+            float d = length(p - vec2(cx, cy));
+            result = max(result, 1.0 - smoothstep(dotR * 0.6, dotR, d));
+        }
+    }
+    return result;
 }
 
 // ── Sphere ray intersection ────────────────────────────────
@@ -117,6 +136,49 @@ float starsPattern(vec3 n) {
     return d;
 }
 
+// ── Star index labels ──────────────────────────────────────
+float starLabels(vec3 n) {
+    float t = u_time * 0.15;
+    n.xz *= rot(t);
+    n.xy *= rot(t * 0.6);
+
+    float bestDot = -1.0;
+    int bestIdx = 0;
+    for (int i = 0; i < 12; i++) {
+        vec3 cDir = getStarCenter(i);
+        float d = dot(n, cDir);
+        if (d > bestDot) { bestDot = d; bestIdx = i; }
+    }
+
+    vec3 cDir = getStarCenter(bestIdx);
+    vec3 upRef = abs(cDir.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tU = normalize(cross(upRef, cDir));
+    vec3 tV = normalize(cross(cDir, tU));
+    vec2 lp = vec2(dot(n, tU), dot(n, tV)) / bestDot;
+    lp *= 2.6 / STAR_SIZE;
+
+    return drawDots(float(bestIdx), lp, 0.035, 0.055);
+}
+
+// ── Background ─────────────────────────────────────────────
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+vec3 background(vec2 uv) {
+    vec3 col = mix(vec3(0.01, 0.005, 0.04), vec3(0.03, 0.01, 0.08), uv.y * 0.5 + 0.5);
+    float t = u_time * 0.25;
+    for (int i = 0; i < 12; i++) {
+        float fi = float(i);
+        vec2 p = vec2(hash(vec2(fi, 1.0)) * 2.4 - 1.2, hash(vec2(fi, 2.0)) * 0.8 + 0.1);
+        p.x += sin(t + fi * 1.3) * 0.06;
+        float r = hash(vec2(fi, 3.0)) * 0.025 + 0.008;
+        float b = smoothstep(r, 0.0, length(uv - p));
+        col += mix(vec3(0.1, 0.15, 0.9), vec3(0.0, 0.5, 1.0), hash(vec2(fi, 4.0))) * b * 0.5;
+    }
+    return col;
+}
+
 // ── Neon colours ───────────────────────────────────────────
 vec3 edgeRGB = STAR_EDGE_COLOR.rgb;
 float edgeI  = STAR_EDGE_COLOR.a;
@@ -130,20 +192,19 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
 
     // Star edge glow (neon outline)
     float edgeDist = abs(d);
-    float edgeLine = smoothstep(0.06 * STAR_EDGE_WIDTH, 0.0, edgeDist);
-    float edgeGlow = exp(-edgeDist * 6.0 / STAR_EDGE_WIDTH);
+    float edgeLine = smoothstep(0.06 * EDGE_WIDTH, 0.0, edgeDist);
+    float edgeGlow = exp(-edgeDist * 6.0 / EDGE_WIDTH);
 
     // Lighting
-    vec3 L = normalize(LIGHT_DIR);
+    vec3 L = normalize(vec3(1.5, 2.0, -2.0));
     float diff = max(dot(n, L), 0.0);
-    vec3 diffLight = LIGHT_DIFFUSE.rgb * LIGHT_DIFFUSE.a * diff;
     vec3 H = normalize(L - rd);
-    float spec = pow(max(dot(n, H), 0.0), SPHERE_GLOSS) * SPHERE_REFLECT;
+    float spec = pow(max(dot(n, H), 0.0), 80.0);
     float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
 
     // Base sphere
     vec3 baseCol = SPHERE_COLOR.rgb * SPHERE_COLOR.a;
-    baseCol *= (0.15 + diffLight);
+    baseCol *= (0.15 + diff * 0.5);
 
     // Star fill with intensity for bright whites
     vec3 starCol = STAR_FILL.rgb * STAR_FILL.a * (0.3 + diff * 0.7);
@@ -166,6 +227,12 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     float silhouette = pow(rim, 6.0);
     surfCol += edgeRGB * silhouette * edgeI * 0.3;
 
+    // Star index labels
+    if (SHOW_LABELS) {
+        float label = starLabels(n);
+        surfCol = mix(surfCol, vec3(1.0), label);
+    }
+
     // Pulse
     surfCol *= 1.0 + 0.05 * sin(u_time * 2.0);
 
@@ -183,8 +250,8 @@ void main() {
     vec3 ro = vec3(0.0, 0.0, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
 
-    float ballR = SPHERE_SIZE;
-    vec3 col = mix(vec3(0.01, 0.005, 0.04), vec3(0.03, 0.01, 0.08), uv.y * 0.5 + 0.5);
+    float ballR = 0.85 * SPHERE_SIZE;
+    vec3 col = background(uv);
 
     // Intersect sphere
     vec2 hit = iSphere(ro, rd, ballR);
@@ -201,6 +268,19 @@ void main() {
         vec4 front = shadeSphere(nFront, rd);
         col = mix(col, front.rgb, front.a);
     }
+
+    // Ground glow beneath sphere
+    // float gd = length(vec2(uv.x, max(uv.y + 0.5, 0.0)));
+    // col += edgeRGB * exp(-gd * 3.0) * 0.15;
+
+    // Vignette
+    vec2 vuv = gl_FragCoord.xy / u_resolution;
+    float vig = 1.0 - 0.4 * length(vuv - 0.5);
+    col *= vig;
+
+    // Tone map
+    col = col / (1.0 + col);
+    col = pow(col, vec3(0.88));
 
     gl_FragColor = vec4(col, 1.0);
 }
