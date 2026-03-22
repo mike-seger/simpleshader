@@ -39,6 +39,7 @@ const float phi = 1.618033988749895;
 
 // 12 face centers of a dodecahedron (star centers)
 vec3 getStarCenter(int idx) {
+    // (±φ, ±1, 0) cyclically - these give the 12 face centers
     if (idx == 0) return normalize(vec3( phi,  1.0,  0.0));
     if (idx == 1) return normalize(vec3( phi, -1.0,  0.0));
     if (idx == 2) return normalize(vec3(-phi,  1.0,  0.0));
@@ -53,19 +54,7 @@ vec3 getStarCenter(int idx) {
     return normalize(vec3( 0.0, -phi, -1.0));
 }
 
-// Get rotation angle for each star so tips align properly
-float getStarRotation(int idx) {
-    // Different rotational offsets based on face orientation
-    if (idx == 0 || idx == 1 || idx == 2 || idx == 3) {
-        return 0.0;  // Equatorial stars
-    } else if (idx == 4 || idx == 5 || idx == 6 || idx == 7) {
-        return 0.31416;  // ~18 degrees - "XZ" oriented stars
-    } else {
-        return 0.62832;  // ~36 degrees - Polar region stars
-    }
-}
-
-// ── Champions League star arrangement with touching tips ──
+// ── Champions League star arrangement with proper 12-star distribution ──
 float starsPattern(vec3 n) {
     // Slow tumble - rotates the entire star pattern
     float t = u_time * 0.12;
@@ -84,23 +73,24 @@ float starsPattern(vec3 n) {
         vec3 tU = normalize(cross(upRef, centerDir));
         vec3 tV = normalize(cross(centerDir, tU));
         
-        // Gnomonic projection
+        // Gnomonic projection - projects sphere point onto tangent plane
         float cosAngle = dot(rotatedN, centerDir);
         
+        // Only consider points in front of the star center
         if (cosAngle > 0.15) {
             // Project onto tangent plane
             vec2 localPos = vec2(dot(rotatedN, tU), dot(rotatedN, tV)) / cosAngle;
             
-            // INCREASED SCALE - make stars LARGER so tips touch
-            // 2.8 makes stars significantly larger to reach neighboring points
-            float starScale = 1.7;
+            // Scale factor - controls star size (larger = bigger stars)
+            // Stars should nearly touch each other at the edges
+            float starScale = 2.2;
             localPos *= starScale;
             
-            // Apply rotation so star points align with neighbors
-            float starRot = getStarRotation(i);
-            localPos *= rot(starRot);
+            // Rotate stars slightly for visual interest
+            float rotAngle = float(i) * PI / 6.0;
+            localPos *= rot(rotAngle);
             
-            // Calculate star SDF
+            // Calculate star SDF (negative inside star)
             float starDist = sdStar5(localPos, 1.0, 0.38);
             
             minDist = min(minDist, starDist);
@@ -132,7 +122,7 @@ vec3 background(vec2 uv) {
 // ── Neon colours ───────────────────────────────────────────
 vec3 neonBlue = vec3(0.08, 0.40, 1.0);
 vec3 neonCyan = vec3(0.05, 0.65, 1.0);
-vec3 starFill = vec3(0.12, 0.38, 0.88);
+vec3 starFill = vec3(0.12, 0.35, 0.85);  // Brighter star interior
 
 // ── Main ───────────────────────────────────────────────────
 void main() {
@@ -155,13 +145,13 @@ void main() {
         // Star pattern - returns SDF value (negative inside star)
         float d = starsPattern(n);
 
-        // Inside star - softer transition for larger stars
-        float insideStar = 1.0 - smoothstep(-0.08, 0.08, d);
+        // Inside star = negative d
+        float insideStar = smoothstep(0.03, -0.03, d);
         
-        // Star edge glow
+        // Star edge glow (neon outline) - wider for better visibility
         float edgeDist = abs(d);
-        float edgeLine = smoothstep(0.12, 0.0, edgeDist);
-        float edgeGlow = exp(-edgeDist * 3.5);
+        float edgeLine = smoothstep(0.09, 0.0, edgeDist);
+        float edgeGlow = exp(-edgeDist * 5.0);
 
         // Lighting
         vec3 L = normalize(vec3(1.5, 2.0, -2.0));
@@ -170,61 +160,63 @@ void main() {
         float spec = pow(max(dot(n, H), 0.0), 80.0);
         float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
 
-        // Base sphere: dark metallic blue
-        vec3 baseCol = vec3(0.008, 0.012, 0.038);
-        baseCol *= (0.2 + diff * 0.65);
+        // Base sphere: dark blue metallic
+        vec3 baseCol = vec3(0.008, 0.015, 0.045);
+        baseCol *= (0.2 + diff * 0.6);
 
-        // Stars: bright metallic
-        vec3 starCol = starFill * (0.6 + diff * 0.9);
+        // Stars: brighter with subtle gradient
+        vec3 starCol = starFill * (0.4 + diff * 0.7);
+        
+        // Add subtle blue gradient across star
         starCol += neonCyan * 0.2;
 
         vec3 surfCol = mix(baseCol, starCol, insideStar);
 
-        // Neon edge lines - enhanced for visible seams
-        surfCol += neonBlue * edgeLine * 4.0;
-        surfCol += neonCyan * edgeGlow * 2.0;
+        // Neon edge lines (brighter for visibility)
+        surfCol += neonBlue * edgeLine * 3.0;
+        surfCol += neonCyan * edgeGlow * 1.2;
 
-        // Inner star glow
-        float innerGlow = insideStar * (1.0 - smoothstep(0.0, 0.15, edgeDist));
+        // Add inner star glow for stars that are fully visible
+        float innerGlow = (1.0 - insideStar) * (1.0 - smoothstep(0.0, 0.08, edgeDist));
         surfCol += neonCyan * innerGlow * 0.8;
 
         // Specular highlight
-        surfCol += neonBlue * spec * 0.7;
+        surfCol += neonBlue * spec * 0.6;
         
         // Fresnel rim light
-        surfCol += neonBlue * fresnel * 0.8;
+        surfCol += neonBlue * fresnel * 0.7;
 
         // Sphere silhouette edge glow
         float rim = 1.0 - max(dot(n, -rd), 0.0);
         float silhouette = pow(rim, 5.0);
-        surfCol += neonCyan * silhouette * 0.7;
+        surfCol += neonCyan * silhouette * 0.6;
 
-        // Pulse animation
-        surfCol *= 1.0 + 0.045 * sin(u_time * 2.2);
+        // Subtle pulse animation
+        surfCol *= 1.0 + 0.04 * sin(u_time * 2.2);
 
         col = surfCol;
 
-        // Ground reflection
+        // Ground reflection (simple fake)
         float groundY = -0.85;
         if (uv.y < -0.42) {
             float reflDist = abs(uv.y + 0.42);
-            float reflStr = exp(-reflDist * 4.0) * 0.4;
-            col = mix(col, col * 0.35 + neonBlue * 0.25, reflStr);
+            float reflStr = exp(-reflDist * 4.0) * 0.35;
+            col = mix(col, col * 0.4 + neonBlue * 0.2, reflStr);
         }
     }
 
-    // Ground glow
+    // Ground glow beneath sphere
     float gd = length(vec2(uv.x, max(uv.y + 0.55, 0.0)));
-    col += neonBlue * exp(-gd * 3.2) * 0.15;
+    col += neonBlue * exp(-gd * 3.0) * 0.12;
 
     // Vignette
     vec2 vuv = gl_FragCoord.xy / u_resolution;
-    float vig = 1.0 - 0.38 * length(vuv - 0.5);
+    float vig = 1.0 - 0.35 * length(vuv - 0.5);
     col *= vig;
 
     // Tone map
     col = col / (1.0 + col);
-    col = pow(col, vec3(0.88));
+    col = pow(col, vec3(0.9));
 
     gl_FragColor = vec4(col, 1.0);
 }

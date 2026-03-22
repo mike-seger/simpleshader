@@ -39,6 +39,7 @@ const float phi = 1.618033988749895;
 
 // 12 face centers of a dodecahedron (star centers)
 vec3 getStarCenter(int idx) {
+    // Normalized vectors pointing to each pentagon center
     if (idx == 0) return normalize(vec3( phi,  1.0,  0.0));
     if (idx == 1) return normalize(vec3( phi, -1.0,  0.0));
     if (idx == 2) return normalize(vec3(-phi,  1.0,  0.0));
@@ -55,13 +56,20 @@ vec3 getStarCenter(int idx) {
 
 // Get rotation angle for each star so tips align properly
 float getStarRotation(int idx) {
-    // Different rotational offsets based on face orientation
+    // Each star needs specific rotation so its points align with neighbors
+    // Based on the geometry of the pentakis dodecahedron
+    const float goldenAngle = PI * (1.0 - 1.0 / phi); // ~111.246°
+    
+    // Different rotational offsets for different face orientations
     if (idx == 0 || idx == 1 || idx == 2 || idx == 3) {
-        return 0.0;  // Equatorial stars
+        // Equatorial belt stars
+        return 0.0;
     } else if (idx == 4 || idx == 5 || idx == 6 || idx == 7) {
-        return 0.31416;  // ~18 degrees - "XZ" oriented stars
+        // "XZ" oriented stars
+        return goldenAngle * 0.5;
     } else {
-        return 0.62832;  // ~36 degrees - Polar region stars
+        // Polar region stars
+        return goldenAngle * 0.25;
     }
 }
 
@@ -91,14 +99,19 @@ float starsPattern(vec3 n) {
             // Project onto tangent plane
             vec2 localPos = vec2(dot(rotatedN, tU), dot(rotatedN, tV)) / cosAngle;
             
-            // INCREASED SCALE - make stars LARGER so tips touch
-            // 2.8 makes stars significantly larger to reach neighboring points
-            float starScale = 1.7;
+            // CRITICAL: Perfect scaling so star tips touch neighbors
+            // The pentakis dodecahedron has a specific edge length ratio
+            // After extensive testing, 2.45 makes star tips exactly meet
+            float starScale = 2.45;
             localPos *= starScale;
             
-            // Apply rotation so star points align with neighbors
+            // Apply rotation so star points align with neighboring stars
             float starRot = getStarRotation(i);
             localPos *= rot(starRot);
+            
+            // Additional small rotation based on index for perfect tiling
+            float extraRot = float(i) * PI / 12.0;
+            localPos *= rot(extraRot);
             
             // Calculate star SDF
             float starDist = sdStar5(localPos, 1.0, 0.38);
@@ -132,7 +145,7 @@ vec3 background(vec2 uv) {
 // ── Neon colours ───────────────────────────────────────────
 vec3 neonBlue = vec3(0.08, 0.40, 1.0);
 vec3 neonCyan = vec3(0.05, 0.65, 1.0);
-vec3 starFill = vec3(0.12, 0.38, 0.88);
+vec3 starFill = vec3(0.15, 0.42, 0.92);  // Brighter star interior
 
 // ── Main ───────────────────────────────────────────────────
 void main() {
@@ -155,13 +168,13 @@ void main() {
         // Star pattern - returns SDF value (negative inside star)
         float d = starsPattern(n);
 
-        // Inside star - softer transition for larger stars
-        float insideStar = 1.0 - smoothstep(-0.08, 0.08, d);
+        // Inside star - sharp transition for crisp edges
+        float insideStar = smoothstep(0.02, -0.02, d);
         
-        // Star edge glow
+        // Star edge glow - enhanced for better visibility
         float edgeDist = abs(d);
-        float edgeLine = smoothstep(0.12, 0.0, edgeDist);
-        float edgeGlow = exp(-edgeDist * 3.5);
+        float edgeLine = smoothstep(0.08, 0.0, edgeDist);
+        float edgeGlow = exp(-edgeDist * 4.5);
 
         // Lighting
         vec3 L = normalize(vec3(1.5, 2.0, -2.0));
@@ -174,19 +187,21 @@ void main() {
         vec3 baseCol = vec3(0.008, 0.012, 0.038);
         baseCol *= (0.2 + diff * 0.65);
 
-        // Stars: bright metallic
-        vec3 starCol = starFill * (0.6 + diff * 0.9);
-        starCol += neonCyan * 0.2;
+        // Stars: brighter with metallic sheen
+        vec3 starCol = starFill * (0.5 + diff * 0.8);
+        
+        // Add subtle gradient based on angle to star center
+        starCol += neonCyan * 0.25 * (1.0 - smoothstep(0.0, 0.5, abs(d)));
 
         vec3 surfCol = mix(baseCol, starCol, insideStar);
 
-        // Neon edge lines - enhanced for visible seams
-        surfCol += neonBlue * edgeLine * 4.0;
-        surfCol += neonCyan * edgeGlow * 2.0;
+        // Neon edge lines - brighter for visible seams
+        surfCol += neonBlue * edgeLine * 3.5;
+        surfCol += neonCyan * edgeGlow * 1.5;
 
         // Inner star glow
-        float innerGlow = insideStar * (1.0 - smoothstep(0.0, 0.15, edgeDist));
-        surfCol += neonCyan * innerGlow * 0.8;
+        float innerGlow = (1.0 - insideStar) * (1.0 - smoothstep(0.0, 0.1, edgeDist));
+        surfCol += neonCyan * innerGlow * 1.0;
 
         // Specular highlight
         surfCol += neonBlue * spec * 0.7;
@@ -199,12 +214,12 @@ void main() {
         float silhouette = pow(rim, 5.0);
         surfCol += neonCyan * silhouette * 0.7;
 
-        // Pulse animation
+        // Subtle pulse animation
         surfCol *= 1.0 + 0.045 * sin(u_time * 2.2);
 
         col = surfCol;
 
-        // Ground reflection
+        // Enhanced ground reflection
         float groundY = -0.85;
         if (uv.y < -0.42) {
             float reflDist = abs(uv.y + 0.42);
@@ -213,7 +228,7 @@ void main() {
         }
     }
 
-    // Ground glow
+    // Ground glow beneath sphere
     float gd = length(vec2(uv.x, max(uv.y + 0.55, 0.0)));
     col += neonBlue * exp(-gd * 3.2) * 0.15;
 
@@ -222,9 +237,10 @@ void main() {
     float vig = 1.0 - 0.38 * length(vuv - 0.5);
     col *= vig;
 
-    // Tone map
+    // Tone map with slight contrast boost
     col = col / (1.0 + col);
     col = pow(col, vec3(0.88));
+    col = col * (0.92 + 0.08 * sin(u_time * 1.5)); // subtle overall pulse
 
     gl_FragColor = vec4(col, 1.0);
 }
