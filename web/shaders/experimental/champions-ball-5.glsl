@@ -4,7 +4,6 @@ uniform vec2 u_resolution;
 uniform float u_time;
 
 #define PI  3.14159265
-#define TAU 6.28318530
 
 // ── Tweakable constants ────────────────────────────────────
 const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
@@ -19,6 +18,7 @@ const float SPHERE_INTENSITY    = 1.0;                              // sphere br
 const float SPHERE_GLOSS        = 200.0;  // specular exponent (higher = sharper highlight)
 const float SPHERE_REFLECT      = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
 const float SPHERE_SIZE         = 1.3;   // sphere size factor (1.0 = default)
+const float PROJ_SCALE          = 2.6 / STAR_SIZE; // gnomonic projection scale
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0); // point light direction (world space)
 const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
 
@@ -108,7 +108,7 @@ float starsPattern(vec3 n) {
         float cosA = dot(n, cDir);
         if (cosA > 0.1) {
             vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
-            lp *= 2.6 / STAR_SIZE;
+            lp *= PROJ_SCALE;
             lp *= rot(getStarRotation(i));
             float sd = sdStar5(lp, 1.0, STAR_TIP_ANGLE);
             d = min(d, sd);
@@ -121,6 +121,7 @@ float starsPattern(vec3 n) {
 // ── Neon colours ───────────────────────────────────────────
 vec3 edgeRGB = STAR_EDGE_COLOR.rgb;
 float edgeI  = STAR_EDGE_INTENSITY;
+vec3 lightDir = normalize(LIGHT_DIR);
 
 // ── Shade one sphere hit point ─────────────────────────────
 // Returns vec4(rgb, alpha) for compositing
@@ -135,12 +136,14 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     float edgeGlow = exp(-edgeDist * 6.0 / STAR_EDGE_WIDTH);
 
     // Lighting
-    vec3 L = normalize(LIGHT_DIR);
+    vec3 L = lightDir;
     float diff = max(dot(n, L), 0.0);
     vec3 diffLight = LIGHT_DIFFUSE.rgb * LIGHT_DIFFUSE.a * diff;
     vec3 H = normalize(L - rd);
     float spec = pow(max(dot(n, H), 0.0), SPHERE_GLOSS) * SPHERE_REFLECT;
-    float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+    float rimFactor = 1.0 - max(dot(n, -rd), 0.0);
+    float fresnel = pow(rimFactor, 3.0);
+    float silhouette = fresnel * fresnel;
 
     // Base sphere
     vec3 baseCol = SPHERE_COLOR.rgb * SPHERE_INTENSITY;
@@ -163,8 +166,6 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     surfCol += edgeRGB * fresnel * 0.5;
 
     // Sphere silhouette edge glow
-    float rim = 1.0 - max(dot(n, -rd), 0.0);
-    float silhouette = pow(rim, 6.0);
     surfCol += edgeRGB * silhouette * edgeI * 0.3;
 
     // Pulse
