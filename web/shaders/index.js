@@ -7,6 +7,7 @@ const SHADER_INDEX = [
   {
     folder: "experimental",
     shaders: [
+      { name: "Champions Ball 0", path: "web/shaders/experimental/champions-ball-0.glsl" },
       { name: "Champions Ball 1", path: "web/shaders/experimental/champions-ball-1.glsl" },
       { name: "Champions Ball 2", path: "web/shaders/experimental/champions-ball-2.glsl" },
       { name: "Champions Ball 3", path: "web/shaders/experimental/champions-ball-3.glsl" },
