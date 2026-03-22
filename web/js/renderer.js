@@ -162,6 +162,18 @@ export default class Renderer {
     return (ref - this._startTime) / 1000;
   }
 
+  /** Seek u_time to a specific value in seconds */
+  seekTo(seconds) {
+    if (this._paused) {
+      this._startTime = this._pauseTime - seconds * 1000;
+      this._draw();
+      this.canvas.style.backgroundImage = `url(${this.canvas.toDataURL()})`;
+      this.canvas.style.backgroundSize = "100% 100%";
+    } else {
+      this._startTime = performance.now() - seconds * 1000;
+    }
+  }
+
   _draw() {
     const gl = this.gl;
     if (!this._program) return;

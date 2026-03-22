@@ -12,6 +12,20 @@ const SHADER_INDEX = [
       { name: "Champions Ball 2", path: "web/shaders/experimental/champions-ball-2.glsl" },
       { name: "Champions Ball 3", path: "web/shaders/experimental/champions-ball-3.glsl" },
       { name: "Champions Ball 4", path: "web/shaders/experimental/champions-ball-4.glsl" },
+      { name: "Sliding Waves", path: "web/shaders/experimental/sliding-waves.glsl" },
+    ],
+  },
+  {
+    folder: "shadertoy",
+    shaders: [
+      { name: "Bands Remix", path: "web/shaders/shadertoy/bands-remix.glsl" },
+      { name: "Blue Red Shiny 2", path: "web/shaders/shadertoy/blue-red-shiny-2.glsl" },
+      { name: "Colorful Reactive Ribbons", path: "web/shaders/shadertoy/colorful-reactive-ribbons.glsl" },
+      { name: "Floating Ribbons", path: "web/shaders/shadertoy/floating-ribbons.glsl" },
+      { name: "Flowing Ribbons", path: "web/shaders/shadertoy/flowing-ribbons.glsl" },
+      { name: "Irridescent Ribbons", path: "web/shaders/shadertoy/irridescent-ribbons.glsl" },
+      { name: "Ribbon Waves", path: "web/shaders/shadertoy/ribbon-waves.glsl" },
+      { name: "Vertical Ribbin", path: "web/shaders/shadertoy/vertical-ribbin.glsl" },
     ],
   },
   {

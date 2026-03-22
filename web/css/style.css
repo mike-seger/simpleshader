@@ -222,7 +222,7 @@ body {
 }
 #btn-apply:hover { background: #1a8ad4; }
 
-#btn-playpause {
+#btn-playpause, #btn-reset-time {
   font-family: 'Material Icons Round-Regular';
   background: #444;
   color: #fff;
@@ -235,7 +235,22 @@ body {
   min-width: 28px;
   text-align: center;
 }
-#btn-playpause:hover { background: #555; }
+#btn-playpause:hover, #btn-reset-time:hover { background: #555; }
+
+#time-slider {
+  flex: 1;
+  min-width: 60px;
+  max-width: 400px;
+  accent-color: #007acc;
+  cursor: pointer;
+  height: 4px;
+}
+#toolbar-time {
+  font-size: 11px;
+  color: #aaa;
+  font-family: monospace;
+  white-space: nowrap;
+}
 
 #editor-container {
   flex: 1;

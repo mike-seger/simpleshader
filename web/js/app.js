@@ -30,6 +30,9 @@ const btnModeList   = document.getElementById("btn-mode-list");
 const btnModeTune   = document.getElementById("btn-mode-tune");
 const sidebarTuner  = document.getElementById("sidebar-tuner");
 const tunerContainer = document.getElementById("tuner-container");
+const timeSlider    = document.getElementById("time-slider");
+const toolbarTime   = document.getElementById("toolbar-time");
+const btnResetTime  = document.getElementById("btn-reset-time");
 
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
@@ -37,6 +40,11 @@ let currentPath = null;   // active built-in shader path
 let popoutWin = null;     // reference to pop-out window
 let popoutPoll = null;    // interval to detect pop-out closure
 let debugVisible = false; // debug overlay state
+
+// ── Time slider state ─────────────────────────────────────
+const SLIDER_INIT_MAX = 600;  // 10 minutes initial range
+const SLIDER_EXTEND   = 600;  // extend by 10 minutes when reached
+let sliderDragging = false;
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
@@ -62,6 +70,27 @@ function fpsHandler(fps) {
 renderer.onFps = fpsHandler;
 renderer.start();
 
+// Update toolbar time + slider at 10 Hz
+function formatToolbarTime(t) {
+  const mins = Math.floor(t / 60);
+  const secs = Math.floor(t % 60);
+  const cs   = Math.floor((t % 1) * 100);
+  return String(mins).padStart(2, "0") + ":" +
+         String(secs).padStart(2, "0") + "." +
+         String(cs).padStart(2, "0");
+}
+setInterval(() => {
+  const t = Math.max(0, activeRenderer().getTime());
+  toolbarTime.textContent = formatToolbarTime(t);
+  if (!sliderDragging) {
+    const max = parseFloat(timeSlider.max);
+    if (!activeRenderer().paused && t >= max) {
+      timeSlider.max = String(max + SLIDER_EXTEND);
+    }
+    timeSlider.value = t;
+  }
+}, 100);
+
 // ── Editor ────────────────────────────────────────────────
 const editor = new Editor(
   document.getElementById("editor-container"),
@@ -85,6 +114,19 @@ initSplitter(
 
 // ── Toolbar ───────────────────────────────────────────────
 btnApply.addEventListener("click", () => applyShader(editor.getValue()));
+
+// ── Time slider ───────────────────────────────────────────
+timeSlider.addEventListener("pointerdown", () => { sliderDragging = true; });
+document.addEventListener("pointerup", () => { sliderDragging = false; });
+timeSlider.addEventListener("input", () => {
+  activeRenderer().seekTo(parseFloat(timeSlider.value));
+});
+btnResetTime.addEventListener("click", () => {
+  activeRenderer().seekTo(0);
+  timeSlider.max = String(SLIDER_INIT_MAX);
+  timeSlider.value = "0";
+  toolbarTime.textContent = "00:00.00";
+});
 
 btnPlayPause.addEventListener("click", () => {
   const r = activeRenderer();
@@ -249,6 +291,10 @@ function applyShader(source) {
     showError(err);
   } else {
     hideError();
+    // Reset slider when time resets
+    timeSlider.max = String(SLIDER_INIT_MAX);
+    timeSlider.value = "0";
+    toolbarTime.textContent = "00:00.00";
   }
 }
 

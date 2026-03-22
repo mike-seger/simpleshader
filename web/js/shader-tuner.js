@@ -37,7 +37,7 @@ function parseConstants(source) {
 
     // Match: const <type> <NAME> = <value>;  // optional comment
     const m = line.match(
-      /^\s*const\s+(float|bool|vec[234])\s+(\w+)\s*=\s*(.+?)\s*;\s*(\/\/.*)?$/
+      /^\s*const\s+(float|int|bool|vec[234])\s+(\w+)\s*=\s*(.+?)\s*;\s*(\/\/.*)?$/
     );
     if (!m) continue;
 
@@ -49,6 +49,8 @@ function parseConstants(source) {
     let value;
     if (type === "float") {
       value = parseFloat(rawVal);
+    } else if (type === "int") {
+      value = parseInt(rawVal, 10);
     } else if (type === "bool") {
       value = rawVal === "true";
     } else {
@@ -68,9 +70,20 @@ function parseConstants(source) {
 }
 
 /**
- * Determine slider range heuristics from the name and current value.
+ * Determine slider range — first checks for @range(min, max[, step]) in the
+ * line comment, then falls back to name-based heuristics.
  */
-function getRange(name, value) {
+function getRange(name, value, comment) {
+  // Explicit range annotation in comment: @range(min, max) or @range(min, max, step)
+  if (comment) {
+    const m = comment.match(/@range\(\s*([^,)]+),\s*([^,)]+)(?:,\s*([^)]+))?\s*\)/);
+    if (m) {
+      const min  = parseFloat(m[1]);
+      const max  = parseFloat(m[2]);
+      const step = m[3] ? parseFloat(m[3]) : (max - min) / 200;
+      return { min, max, step };
+    }
+  }
   const n = name.toUpperCase();
   if (n.includes("OPACITY") || n.includes("ALPHA")) return { min: 0, max: 1, step: 0.01 };
   if (n.includes("RATIO")) return { min: 0, max: 1, step: 0.01 };
@@ -117,6 +130,8 @@ function rewriteConstant(source, parsed, newValue) {
   let valStr;
   if (parsed.type === "float") {
     valStr = fmtFloat(newValue);
+  } else if (parsed.type === "int") {
+    valStr = String(Math.round(newValue));
   } else if (parsed.type === "bool") {
     valStr = newValue ? "true" : "false";
   } else if (parsed.type === "vec4") {
@@ -228,9 +243,19 @@ export default class ShaderTuner {
       return;
     }
 
+    if (p.type === "int") {
+      this._proxyObj[p.name] = p.value;
+      const range = getRange(p.name, p.value, p.comment);
+      const c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
+        .name(label)
+        .onChange(() => { this._proxyObj[p.name] = Math.round(this._proxyObj[p.name]); this._apply(p); });
+      if (tip) c.domElement.setAttribute("title", tip);
+      return;
+    }
+
     if (p.type === "float") {
       this._proxyObj[p.name] = p.value;
-      const range = getRange(p.name, p.value);
+      const range = getRange(p.name, p.value, p.comment);
       const c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
         .name(label)
         .onChange(() => this._apply(p));
@@ -264,7 +289,7 @@ export default class ShaderTuner {
       this._proxyObj[key] = p.value[i];
       const range = isDirection(p.name)
         ? { min: -10, max: 10, step: 0.1 }
-        : getRange(p.name, p.value[i]);
+        : getRange(p.name, p.value[i], p.comment);
       folder.add(this._proxyObj, key, range.min, range.max, range.step)
         .name(labels[i].toUpperCase())
         .onChange(() => this._applyVec(p, dim, labels));
