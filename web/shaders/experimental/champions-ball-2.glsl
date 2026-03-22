@@ -11,11 +11,12 @@ const float STAR_SIZE       = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_TIP_ANGLE  = 0.38;  // inner valley fraction (0 = needle, 1 = pentagon)
 const float EDGE_WIDTH      = 0.3;   // 1.0 = default, larger = thicker neon edges
 const bool  SHOW_LABELS     = false; // show star index dot counts
-const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 1.0);     // star interior (rgb + intensity)
+//const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 10.0);     // star interior (rgb + intensity)
+const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 10.0);     // star interior (rgb + intensity)
 const vec4  STAR_EDGE_COLOR = vec4(0.05, 0.65, 1.0, 1.0);   // star edge glow (rgb + intensity)
-const vec4  SPHERE_COLOR    = vec4(0.005, 0.012, 0.035, 1.0); // sphere base (rgb + intensity)
-const float SPHERE_OPACITY  = 0.8;  // 0.0 = fully transparent, 1.0 = fully opaque
-const float STAR_OPACITY    = 0.9;  // 0.0 = fully transparent, 1.0 = fully opaque
+const vec4  SPHERE_COLOR    = vec4(0.5412, 0.7765, 1.0, 20.0); // sphere base (rgb + intensity)
+const float SPHERE_OPACITY  = 0.05;  // 0.0 = fully transparent, 1.0 = fully opaque
+const float STAR_OPACITY    = 0.3;  // 0.0 = fully transparent, 1.0 = fully opaque
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
