@@ -16,6 +16,7 @@ const vec4  STAR_FILL       = vec4(0.3059, 0.4588, 1.0, 10.0);     // star inter
 const vec4  STAR_EDGE_COLOR = vec4(0.05, 0.65, 1.0, 1.0);   // star edge glow (rgb + intensity)
 const vec4  SPHERE_COLOR    = vec4(0.5412, 0.7765, 1.0, 20.0); // sphere base (rgb + intensity)
 const float SPHERE_OPACITY  = 0.05;  // 0.0 = fully transparent, 1.0 = fully opaque
+const float SPHERE_SIZE     = 1.3;   // sphere size factor (1.0 = default)
 const float STAR_OPACITY    = 0.3;  // 0.0 = fully transparent, 1.0 = fully opaque
 
 mat2 rot(float a) {
@@ -250,7 +251,7 @@ void main() {
     vec3 ro = vec3(0.0, 0.0, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
 
-    float ballR = 0.85;
+    float ballR = SPHERE_SIZE;
     vec3 col = background(uv);
 
     // Intersect sphere

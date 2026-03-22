@@ -6,6 +6,8 @@ uniform float u_time;
 #define PI  3.14159265
 #define TAU 6.28318530
 
+const float SPHERE_SIZE     = 1.3;   // sphere size factor (1.0 = default)
+
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
     return mat2(c, -s, s, c);
