@@ -156,10 +156,13 @@ btnPopout.addEventListener("click", () => {
 const tuner = new ShaderTuner(
   tunerContainer,
   () => editor.getValue(),
-  (source) => {
+  async (source) => {
     editor.setValue(source);
     if (currentName) sidebar.saveToCustom(currentName, source);
-    const err = activeRenderer().compile(source, true);
+    let resolved;
+    try { resolved = await resolveForCurrent(source); }
+    catch (e) { showError(String(e)); return; }
+    const err = activeRenderer().compile(resolved, true);
     if (err) showError(err); else hideError();
   },
 );
@@ -296,13 +299,48 @@ function activeRenderer() {
 
 // ── Apply / compile ───────────────────────────────────────
 
-function applyShader(source) {
+/**
+ * Resolves // @include <path> directives by fetching and inlining each file.
+ * @param {string} src      Raw shader source
+ * @param {string} baseUrl  Absolute URL used to resolve relative include paths
+ */
+async function resolveIncludes(src, baseUrl) {
+  const includeRe = /^\s*\/\/\s*@include\s+(\S+)/;
+  const lines = src.split('\n');
+  const resolved = await Promise.all(lines.map(async line => {
+    const m = line.match(includeRe);
+    if (!m) return line;
+    const url = new URL(m[1], baseUrl).href;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`@include ${m[1]}: HTTP ${res.status}`);
+    return res.text();
+  }));
+  return resolved.join('\n');
+}
+
+/** Resolve @include paths relative to the currently loaded shader. */
+async function resolveForCurrent(source) {
+  const baseUrl = currentPath
+    ? new URL(currentPath, window.location.href).href
+    : window.location.href;
+  return resolveIncludes(source, baseUrl);
+}
+
+async function applyShader(source) {
   // Save to custom storage if editing a custom shader
   if (currentName) {
     sidebar.saveToCustom(currentName, source);
   }
 
-  const err = activeRenderer().compile(source);
+  let resolved;
+  try {
+    resolved = await resolveForCurrent(source);
+  } catch (e) {
+    showError(String(e));
+    return;
+  }
+
+  const err = activeRenderer().compile(resolved);
   if (err) {
     showError(err);
   } else {
@@ -407,7 +445,7 @@ function openPopout() {
   const r = new Renderer(c);
   popoutWin._renderer = r;
   r.onFps = fpsHandler;
-  r.compile(editor.getValue());
+  resolveForCurrent(editor.getValue()).then(src => r.compile(src));
   // Sync pause state
   if (renderer.paused) r.togglePause();
   r.start();
@@ -438,8 +476,7 @@ function restoreEmbedded() {
   editorPane.style.flex = _savedEditorFlex;
   editorPane.style.height = _savedEditorHeight;
   // Recompile current source into embedded renderer so it's in sync
-  renderer.compile(editor.getValue());
-  renderer.start();
+  resolveForCurrent(editor.getValue()).then(src => { renderer.compile(src); renderer.start(); });
   editor.layout();
 }
 

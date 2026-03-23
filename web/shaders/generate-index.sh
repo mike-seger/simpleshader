@@ -22,7 +22,7 @@ title_case() {
 const SHADER_INDEX = [
 EOF
 
-  for dir in $(find . -mindepth 1 -maxdepth 1 -type d | sort); do
+  for dir in $(find . -mindepth 1 -maxdepth 1 -type d | grep -v '^\./lib$' | sort); do
     folder=${dir#./}
     files=$(find "$dir" -maxdepth 1 -type f -name '*.glsl' | sort)
     [ -n "$files" ] || continue

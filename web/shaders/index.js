@@ -12,6 +12,7 @@ const SHADER_INDEX = [
       { name: "Champions Ball 2", path: "web/shaders/experimental/champions-ball-2.glsl" },
       { name: "Champions Ball 3", path: "web/shaders/experimental/champions-ball-3.glsl" },
       { name: "Champions Ball 4", path: "web/shaders/experimental/champions-ball-4.glsl" },
+      { name: "Plasma Grid", path: "web/shaders/experimental/plasma-grid.glsl" },
       { name: "Sliding Waves", path: "web/shaders/experimental/sliding-waves.glsl" },
     ],
   },
@@ -28,12 +29,6 @@ const SHADER_INDEX = [
       { name: "Total Noob (loading Ring)", path: "web/shaders/shadertoy/total noob (loading ring).glsl" },
       { name: "Total Noob", path: "web/shaders/shadertoy/total-noob.glsl" },
       { name: "Vertical Ribbon", path: "web/shaders/shadertoy/vertical-ribbon.glsl" },
-    ],
-  },
-  {
-    folder: "simple",
-    shaders: [
-      { name: "Edge Grid", path: "web/shaders/simple/edge-grid.glsl" },
     ],
   },
   {
