@@ -10,7 +10,8 @@ const float FRAME_WIDTH  = 0.05;  // @range(0.0, 0.3, 0.005)
 const float LINE_W       = 0.003; // @range(0.001, 0.02, 0.001)
 const vec4  LINE_H_COLOR = vec4(0.4392, 0.4392, 0.4392, 1.0); // horizontal line color + opacity
 const vec4  LINE_V_COLOR = vec4(0.4392, 0.4392, 0.4392, 1.0); // vertical line color + opacity
-const int   PALETTE      = 0;    // @range(0, 5, 1)  0=Rainbow 1=Neon 2=Pastel 3=Ocean 4=Sunset 5=Mono
+const int   PALETTE      = 0;   // @range(0, 5, 1)  0=Rainbow 1=Neon 2=Pastel 3=Ocean 4=Sunset 5=Mono
+const float PLASMA_SPEED = 2.0; // @range(0.0, 8.0, 0.01)
 // @lil-gui-end
 
 // Returns vec4(x, y, w, h) of the largest inner rectangle that:
@@ -132,6 +133,40 @@ vec4 paintCellsRandomly(GridParams p) {
     return vec4(getPaletteColor(r), 1.0);
 }
 
+// Classic multi-wave plasma mapped through the active palette.
+// Uses cell-centre coordinates so the plasma is smooth across cell boundaries.
+vec4 paintCellsPlasma(GridParams p) {
+    vec2 fc = gl_FragCoord.xy;
+
+    // Clip to rectangle
+    if (fc.x < p.rect.x || fc.x > p.rect.x + p.rect.z ||
+        fc.y < p.rect.y || fc.y > p.rect.y + p.rect.w) return vec4(0.0);
+
+    // Snap to cell centre in normalised cell space
+    float px = fc.x - p.rect.x;
+    float py = fc.y - p.rect.y;
+    float cx = (floor(px / p.dx) + 0.5) * p.dx;
+    float cy = (floor(py / p.dy) + 0.5) * p.dy;
+
+    // Normalise to [0, 1] over the grid area
+    float nx = cx / p.rect.z;
+    float ny = cy / p.rect.w;
+
+    float t = u_time * PLASMA_SPEED;
+
+    // Four overlapping sine waves
+    float v = 0.0;
+    v += sin(nx * 6.0 + t);
+    v += sin(ny * 6.0 + t * 1.3);
+    v += sin((nx + ny) * 5.0 + t * 0.7);
+    v += sin(sqrt(nx * nx + ny * ny) * 8.0 - t * 1.1);
+
+    // Map [-4,4] → [0,1]
+    float plasma = v * 0.125 + 0.5;
+
+    return vec4(getPaletteColor(plasma), 1.0);
+}
+
 void main() {
     vec2 res = u_resolution;
 
@@ -148,7 +183,7 @@ void main() {
     p.lineVAlpha = LINE_V_COLOR.a;
 
     // Cell colours as background, grid lines composited on top
-    vec3 cells = paintCellsRandomly(p).rgb;
+    vec3 cells = paintCellsPlasma(p).rgb;
     vec4 grid  = drawGrid(p);
     vec3 col   = mix(cells, grid.rgb, grid.a);
 
