@@ -218,13 +218,15 @@ export default class ShaderTuner {
     }
 
     for (const group of groups) {
-      if (group.items.length > 1) {
+      if (group.items.length > 2) {
         const folder = this._gui.addFolder(prettyName(group.prefix));
         for (const p of group.items) {
           this._addControl(p, folder, group.prefix);
         }
       } else {
-        this._addControl(group.items[0], this._gui, null);
+        for (const p of group.items) {
+          this._addControl(p, this._gui, null);
+        }
       }
     }
   }

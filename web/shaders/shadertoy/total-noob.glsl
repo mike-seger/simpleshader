@@ -1,5 +1,5 @@
 /*
-    * "Total Noob" by Gabor Papp
+    * "Total Noob"
     * https://www.shadertoy.com/view/XdlSDs
     *
     * A simple shader that demonstrates how to create a colorful, animated pattern using basic trigonometric functions and color manipulation. The shader generates a dynamic, swirling pattern that changes over time, creating a visually appealing effect.

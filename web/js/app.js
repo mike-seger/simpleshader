@@ -20,14 +20,13 @@ const btnApply      = document.getElementById("btn-apply");
 const btnPlayPause  = document.getElementById("btn-playpause");
 const btnDebug      = document.getElementById("btn-debug");
 const btnPopout     = document.getElementById("btn-popout");
-const btnToggleList = document.getElementById("btn-toggle-list");
+const btnModeList   = document.getElementById("btn-mode-list");
+const btnModeTune   = document.getElementById("btn-mode-tune");
 const btnNew        = document.getElementById("btn-new");
 const btnDownload   = document.getElementById("btn-download");
 const btnDuplicate  = document.getElementById("btn-duplicate");
 const btnDelete     = document.getElementById("btn-delete");
 const sidebarList   = document.getElementById("sidebar-list");
-const btnModeList   = document.getElementById("btn-mode-list");
-const btnModeTune   = document.getElementById("btn-mode-tune");
 const sidebarTuner  = document.getElementById("sidebar-tuner");
 const tunerContainer = document.getElementById("tuner-container");
 const timeSlider    = document.getElementById("time-slider");
@@ -153,19 +152,7 @@ btnPopout.addEventListener("click", () => {
   }
 });
 
-btnToggleList.addEventListener("click", () => {
-  const hidden = sidebarList.classList.toggle("hidden");
-  btnToggleList.textContent = hidden ? "left_panel_open" : "left_panel_close";
-  btnNew.classList.toggle("hidden", hidden);
-  btnDownload.classList.toggle("hidden", hidden);
-  btnDuplicate.classList.toggle("hidden", hidden);
-  btnDelete.classList.toggle("hidden", hidden);
-  // Also hide tuner when sidebar is hidden
-  if (hidden) sidebarTuner.classList.add("hidden");
-  else if (btnModeTune.classList.contains("active")) sidebarTuner.classList.remove("hidden");
-});
-
-// ── Mode switching (List / Tune) ──────────────────────────
+// ── Panel toggle (list / tune — independent, 4 states) ────
 const tuner = new ShaderTuner(
   tunerContainer,
   () => editor.getValue(),
@@ -177,18 +164,47 @@ const tuner = new ShaderTuner(
   },
 );
 
-function setMode(mode) {
-  const isTune = mode === "tune";
-  btnModeList.classList.toggle("active", !isTune);
-  btnModeTune.classList.toggle("active", isTune);
-  sidebarList.classList.toggle("hidden", isTune);
-  sidebarTuner.classList.toggle("hidden", !isTune);
-  document.body.classList.toggle("mode-tune", isTune);
-  if (isTune) tuner.build();
+function applyPanelState() {
+  const listOn = btnModeList.classList.contains("active");
+  const tuneOn = btnModeTune.classList.contains("active");
+  sidebarList.classList.toggle("hidden", !listOn);
+  sidebarTuner.classList.toggle("hidden", !tuneOn);
+  // Shader-action icons visible only when list panel is open
+  document.body.classList.toggle("panel-list", listOn);
+  document.body.classList.toggle("panel-tune", tuneOn);
+  // Only build tuner controls when the editor already has a shader loaded.
+  // applyShader() handles the rebuild after async shader fetch completes.
+  if (tuneOn && editor.getValue().trim()) tuner.build();
+  localStorage.setItem("simpleshader_panels", JSON.stringify({ list: listOn, tune: tuneOn }));
 }
 
-btnModeList.addEventListener("click", () => setMode("list"));
-btnModeTune.addEventListener("click", () => setMode("tune"));
+btnModeList.addEventListener("click", () => {
+  btnModeList.classList.toggle("active");
+  applyPanelState();
+});
+
+btnModeTune.addEventListener("click", () => {
+  btnModeTune.classList.toggle("active");
+  applyPanelState();
+});
+
+// Restore panel state from localStorage (default: list open)
+{
+  let saved = { list: true, tune: false };
+  try {
+    const raw = localStorage.getItem("simpleshader_panels");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      saved.list = parsed.list ?? true;
+      saved.tune = parsed.tune ?? false;
+    }
+  } catch { /* ignore */ }
+  // Default to list open if nothing is active
+  if (!saved.list && !saved.tune) saved.list = true;
+  btnModeList.classList.toggle("active", saved.list);
+  btnModeTune.classList.toggle("active", saved.tune);
+  applyPanelState();
+}
 
 btnNew.addEventListener("click", () => sidebar.createNew());
 btnDownload.addEventListener("click", downloadCustomShaders);
@@ -295,6 +311,8 @@ function applyShader(source) {
     timeSlider.max = String(SLIDER_INIT_MAX);
     timeSlider.value = "0";
     toolbarTime.textContent = "00:00.00";
+    // Rebuild tuner controls for the newly loaded shader
+    if (btnModeTune.classList.contains("active")) tuner.build();
   }
 }
 

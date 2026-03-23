@@ -282,5 +282,5 @@ body {
 #tuner-container .lil-gui.root { width: 100% !important; }
 #tuner-container > .lil-gui > .title { display: none; }
 
-/* Tune mode: hide shader action icons */
-body.mode-tune .sb-shader-action { display: none !important; }
+/* Shader action icons visible only when list panel is open */
+body:not(.panel-list) .sb-shader-action { display: none !important; }

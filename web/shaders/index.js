@@ -31,6 +31,12 @@ const SHADER_INDEX = [
     ],
   },
   {
+    folder: "simple",
+    shaders: [
+      { name: "Edge Grid", path: "web/shaders/simple/edge-grid.glsl" },
+    ],
+  },
+  {
     folder: "xordev",
     shaders: [
       { name: "3d Fire", path: "web/shaders/xordev/3d-fire.glsl" },
