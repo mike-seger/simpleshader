@@ -227,7 +227,10 @@ void main() {
         vec4 back = shadeSphere(nBack, rd);
         col = mix(col, back.rgb, back.a);
 
-        // Fog inside the sphere — floor plane visible through glass
+        vec3 pFront = ro + rd * hit.x;
+        vec3 nFront = normalize(pFront);
+
+        // Floor fog inside the sphere — lit fog visible through the glass
         if (tFloor > hit.x && tFloor < hit.y) {
             vec3 fp = ro + rd * tFloor;
             float depth = length(fp - ro);
@@ -239,15 +242,39 @@ void main() {
             float dR = length(fp.xz - FLOOR_RIGHT_POS.xz);
             float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
             vec3 uLight = FLOOR_LEFT_COLOR * (glowL + blueAmb) + FLOOR_RIGHT_COLOR * glowR;
-            vec3 innerFog = FOG_COLOR + uLight * (1.0 - FOG_DENSITY * 0.6) * horizonFade;
-            col = mix(col, innerFog, FOG_DENSITY * 0.6);
+            vec3 innerFog = max(FOG_COLOR, vec3(0.0)) + uLight * 0.5 * horizonFade;
+            // Drift animation
+            float drift = 0.85 + 0.15 * sin(fp.x * 3.0 + u_time * 0.3) * cos(fp.z * 2.0 + u_time * 0.2);
+            innerFog *= drift;
+            col = mix(col, innerFog, 0.85);
         }
 
-        // Front face — soft fade near waterline instead of hard clip
-        vec3 pFront = ro + rd * hit.x;
-        vec3 nFront = normalize(pFront);
-        float fogBand = ballR * 0.04;
-        float waterFade = smoothstep(floorY - fogBand, floorY + fogBand, pFront.y);
+        // Rising fog haze above the waterline (glow mist)
+        float hazeHeight = ballR * 0.2;
+        float hazeY = pFront.y - floorY;
+        if (hazeY > -hazeHeight * 0.5 && hazeY < hazeHeight) {
+            // Fog strength: peaks at floor level, fades above
+            float hazeFrac = 1.0 - clamp(hazeY / hazeHeight, 0.0, 1.0);
+            hazeFrac *= hazeFrac;
+            // Get floor glow at this XZ
+            float depth = length(pFront);
+            float horizonFade = 1.0 / (1.0 + depth * 0.04);
+            float dLx = pFront.x - FLOOR_LEFT_POS.x;
+            float dLz = pFront.z - FLOOR_LEFT_POS.z;
+            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
+            float blueAmb = smoothstep(2.0, -2.0, pFront.x) * 0.4 * exp(-depth * 0.02);
+            float dR = length(pFront.xz - FLOOR_RIGHT_POS.xz);
+            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
+            vec3 uLight = FLOOR_LEFT_COLOR * (glowL + blueAmb) + FLOOR_RIGHT_COLOR * glowR;
+            vec3 haze = max(FOG_COLOR, vec3(0.0)) + uLight * 0.4 * horizonFade;
+            float drift = 0.8 + 0.2 * sin(pFront.x * 2.5 + u_time * 0.25) * cos(pFront.z * 1.8 - u_time * 0.15);
+            haze *= drift;
+            col = mix(col, haze, hazeFrac * 0.5);
+        }
+
+        // Front face — wide soft fade near waterline
+        float fogBand = ballR * 0.15;
+        float waterFade = smoothstep(floorY - fogBand * 0.3, floorY + fogBand, pFront.y);
         if (waterFade > 0.001) {
             vec4 front = shadeSphere(nFront, rd);
             col = mix(col, front.rgb, front.a * waterFade);
