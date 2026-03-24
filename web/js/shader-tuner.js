@@ -218,13 +218,56 @@ export default class ShaderTuner {
     }
 
     for (const group of groups) {
-      if (group.items.length > 2) {
+      // A "gate" is a bool whose name exactly matches the group prefix
+      // (e.g. `const bool GRID = true;` gates all GRID_* siblings).
+      const gateIdx = group.items.findIndex(
+        p => p.type === 'bool' && p.name === group.prefix
+      );
+      const gate  = gateIdx !== -1 ? group.items[gateIdx] : null;
+      const gated = gate
+        ? group.items.filter((_, i) => i !== gateIdx)
+        : group.items;
+
+      if (gate && gated.length > 0) {
+        // Create the folder, then inject a checkbox into its title bar so the
+        // enable/disable toggle lives inside the header, not above it.
         const folder = this._gui.addFolder(prettyName(group.prefix));
-        for (const p of group.items) {
+        folder.open();
+
+        // Inject checkbox into the folder title element
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = gate.value;
+        cb.style.cssText = 'margin-right:6px;cursor:pointer;vertical-align:middle;';
+        // Prevent the click from bubbling to the title (which would open/close the folder)
+        cb.addEventListener('click', e => e.stopPropagation());
+        folder.$title.prepend(cb);
+
+        // Show/hide folder content (not the whole folder) based on gate state
+        const applyGate = (on) => {
+          folder.$children.style.display = on ? '' : 'none';
+        };
+        applyGate(gate.value);
+
+        cb.addEventListener('change', () => {
+          this._proxyObj[gate.name] = cb.checked;
+          this._apply(gate);
+          applyGate(cb.checked);
+        });
+
+        this._proxyObj[gate.name] = gate.value;
+        for (const p of gated) {
+          this._addControl(p, folder, group.prefix);
+        }
+      } else if (gated.length > 2) {
+        const folder = this._gui.addFolder(prettyName(group.prefix));
+        for (const p of gated) {
           this._addControl(p, folder, group.prefix);
         }
       } else {
-        for (const p of group.items) {
+        // gated is empty only when gate exists with no siblings — fall back to gate itself
+        const items = gated.length > 0 ? gated : (gate ? [gate] : []);
+        for (const p of items) {
           this._addControl(p, this._gui, null);
         }
       }
