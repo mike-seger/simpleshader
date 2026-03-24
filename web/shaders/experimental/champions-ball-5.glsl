@@ -27,8 +27,15 @@ const float SPIN_RATIO          = 0.6;   // secondary axis speed as fraction of 
 const float SPIN_ANGLE1         = 90.0;  // initial angle of primary axis (degrees)
 const float SPIN_ANGLE2         = 150.0; // initial angle of secondary axis (degrees)
 const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
-const vec3  GLOW_COLOR          = vec3(0.7, 0.05, 0.55); // floor glow color
-const float GLOW_INTENSITY      = 2.5;   // floor glow brightness
+const float FLOOR_SINK          = 0.1;   // how deep sphere sinks into floor (fraction of diameter)
+const vec3  FLOOR_LEFT_COLOR    = vec3(0.1, 0.3, 0.9);  // left under-fog light (blue/azure)
+const float FLOOR_LEFT_POWER    = 2.0;   // left light brightness
+const vec3  FLOOR_LEFT_POS      = vec3(-1.0, 0.0, 0.5); // left light XZ position (Y ignored)
+const vec3  FLOOR_RIGHT_COLOR   = vec3(0.75, 0.05, 0.85); // right under-fog light (magenta/purple)
+const float FLOOR_RIGHT_POWER   = 1.8;   // right light brightness
+const vec3  FLOOR_RIGHT_POS     = vec3(1.2, 0.0, 0.6);  // right light XZ position (Y ignored)
+const float FOG_DENSITY         = 0.85;  // fog opacity over the floor
+const vec3  FOG_COLOR           = vec3(0.01, 0.02, 0.06); // fog base tint
 // @lil-gui-end
 
 mat2 rot(float a) {
@@ -198,17 +205,44 @@ void main() {
     vec3 rd = normalize(vec3(uv, 1.6));
 
     float ballR = SPHERE_SIZE;
-    vec3 col = mix(vec3(0.002, 0.005, 0.02), vec3(0.01, 0.005, 0.03), uv.y * 0.5 + 0.5);
 
-    // Floor glow (magenta light pool beneath the ball)
-    float floorY = -ballR - 0.15;
-    if (rd.y < -0.001) {
+    // Floor plane: sphere sinks FLOOR_SINK * diameter into it
+    float floorY = -ballR + ballR * 2.0 * FLOOR_SINK;
+
+    // Deep navy background gradient
+    vec3 col = mix(vec3(0.005, 0.01, 0.04), vec3(0.02, 0.04, 0.12), uv.y * 0.5 + 0.5);
+
+    // ── Ground plane with fog and under-surface lights ─────
+    bool hitFloor = false;
+    if (rd.y < -0.0001) {
         float tFloor = (floorY - ro.y) / rd.y;
         if (tFloor > 0.0) {
+            hitFloor = true;
             vec3 fp = ro + rd * tFloor;
-            float dist = length(fp.xz);
-            float glow = exp(-dist * dist * 0.5) * GLOW_INTENSITY;
-            col += GLOW_COLOR * glow;
+
+            // Depth from camera — used to fade glow toward the horizon
+            float depth = length(fp - ro);
+            float horizonFade = 1.0 / (1.0 + depth * 0.04);
+
+            // Left light (blue/azure) — wide spread covering the left side
+            float dLx = fp.x - FLOOR_LEFT_POS.x;
+            float dLz = fp.z - FLOOR_LEFT_POS.z;
+            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
+            // Extra wide blue ambient that covers the entire left
+            float blueAmbient = smoothstep(2.0, -2.0, fp.x) * 0.4 * exp(-depth * 0.02);
+
+            // Right light (magenta/purple) — tighter spot
+            float dR = length(fp.xz - FLOOR_RIGHT_POS.xz);
+            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
+
+            // Combined under-fog light bleeding through
+            vec3 underLight = FLOOR_LEFT_COLOR * (glowL + blueAmbient)
+                            + FLOOR_RIGHT_COLOR * glowR;
+
+            // Fog fully covers the floor — lights attenuated by fog density
+            vec3 fogCol = FOG_COLOR + underLight * (1.0 - FOG_DENSITY * 0.6) * horizonFade;
+
+            col = fogCol;
         }
     }
 
@@ -221,11 +255,15 @@ void main() {
         vec4 back = shadeSphere(nBack, rd);
         col = mix(col, back.rgb, back.a);
 
-        // Front face on top
+        // Front face — clip below floor to hide submerged part
         vec3 pFront = ro + rd * hit.x;
         vec3 nFront = normalize(pFront);
-        vec4 front = shadeSphere(nFront, rd);
-        col = mix(col, front.rgb, front.a);
+        if (pFront.y >= floorY) {
+            vec4 front = shadeSphere(nFront, rd);
+            col = mix(col, front.rgb, front.a);
+        } else if (hitFloor) {
+            // Below floor line — show fog instead
+        }
     }
 
     gl_FragColor = vec4(col, 1.0);
