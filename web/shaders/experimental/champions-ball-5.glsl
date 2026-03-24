@@ -21,10 +21,10 @@ const float SPHERE_GLOSS        = 200.0; // specular exponent (higher = sharper 
 const float SPHERE_REFLECT      = 0.1;   // specular reflectiveness (0 = none, 1 = mirror-like)
 const float SPHERE_SIZE         = 1.3;   // sphere size factor (1.0 = default)
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0); // point light direction (world space)
-const vec4  LIGHT_DIFFUSE       = vec4(1.0, 1.0, 1.0, 0.5); // diffuse light color + intensity
+const vec4  LIGHT_DIFFUSE       = vec4(0.99, 1.0, 1.0, 0.5); // diffuse light color + intensity
 const float SPIN_SPEED          = 8.6;   // primary rotation speed (deg/s)
-const float SPIN_RATIO          = 0.6;   // secondary axis speed as fraction of primary
-const float SPIN_ANGLE1         = 90.0;  // initial angle of primary axis (degrees)
+const float SPIN_RATIO          = 0.61;   // secondary axis speed as fraction of primary
+const float SPIN_ANGLE1         = 92.0;  // initial angle of primary axis (degrees)
 const float SPIN_ANGLE2         = 150.0; // initial angle of secondary axis (degrees)
 const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
 const float FLOOR_SINK          = 0.2;   // how deep sphere sinks into floor (fraction of diameter)
@@ -32,10 +32,10 @@ const vec3  FLOOR_LEFT_COLOR    = vec3(0.1, 0.3, 0.9);  // left under-fog light 
 const float FLOOR_LEFT_POWER    = 2.0;   // left light brightness
 const vec3  FLOOR_LEFT_POS      = vec3(-1.0, 0.0, 0.5); // left light XZ position (Y ignored)
 const vec3  FLOOR_RIGHT_COLOR   = vec3(0.75, 0.05, 0.85); // right under-fog light (magenta/purple)
-const float FLOOR_RIGHT_POWER   = 1.8;   // right light brightness
-const vec3  FLOOR_RIGHT_POS     = vec3(1.2, 0.0, 0.6);  // right light XZ position (Y ignored)
-const float FOG_DENSITY         = 0.85;  // fog opacity over the floor
-const vec3  FOG_COLOR           = vec3(0.01, 0.02, 0.06); // fog base tint
+const float FLOOR_RIGHT_POWER   = 3.15;   // right light brightness
+const vec3  FLOOR_RIGHT_POS     = vec3(1.548, 0.0, -0.588);  // right light XZ position (Y ignored)
+const float FOG_DENSITY         = 1.309;  // fog opacity over the floor
+const vec3  FOG_COLOR           = vec3(0.0082, -0.0252, 0.06); // fog base tint
 // @lil-gui-end
 
 mat2 rot(float a) {
@@ -227,12 +227,30 @@ void main() {
         vec4 back = shadeSphere(nBack, rd);
         col = mix(col, back.rgb, back.a);
 
-        // Front face — only above the waterline
+        // Fog inside the sphere — floor plane visible through glass
+        if (tFloor > hit.x && tFloor < hit.y) {
+            vec3 fp = ro + rd * tFloor;
+            float depth = length(fp - ro);
+            float horizonFade = 1.0 / (1.0 + depth * 0.04);
+            float dLx = fp.x - FLOOR_LEFT_POS.x;
+            float dLz = fp.z - FLOOR_LEFT_POS.z;
+            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
+            float blueAmb = smoothstep(2.0, -2.0, fp.x) * 0.4 * exp(-depth * 0.02);
+            float dR = length(fp.xz - FLOOR_RIGHT_POS.xz);
+            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
+            vec3 uLight = FLOOR_LEFT_COLOR * (glowL + blueAmb) + FLOOR_RIGHT_COLOR * glowR;
+            vec3 innerFog = FOG_COLOR + uLight * (1.0 - FOG_DENSITY * 0.6) * horizonFade;
+            col = mix(col, innerFog, FOG_DENSITY * 0.6);
+        }
+
+        // Front face — soft fade near waterline instead of hard clip
         vec3 pFront = ro + rd * hit.x;
         vec3 nFront = normalize(pFront);
-        if (pFront.y >= floorY) {
+        float fogBand = ballR * 0.04;
+        float waterFade = smoothstep(floorY - fogBand, floorY + fogBand, pFront.y);
+        if (waterFade > 0.001) {
             vec4 front = shadeSphere(nFront, rd);
-            col = mix(col, front.rgb, front.a);
+            col = mix(col, front.rgb, front.a * waterFade);
         }
     }
 
