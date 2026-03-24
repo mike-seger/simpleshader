@@ -27,7 +27,7 @@ const float SPIN_RATIO          = 0.6;   // secondary axis speed as fraction of 
 const float SPIN_ANGLE1         = 90.0;  // initial angle of primary axis (degrees)
 const float SPIN_ANGLE2         = 150.0; // initial angle of secondary axis (degrees)
 const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
-const float FLOOR_SINK          = 0.1;   // how deep sphere sinks into floor (fraction of diameter)
+const float FLOOR_SINK          = 0.2;   // how deep sphere sinks into floor (fraction of diameter)
 const vec3  FLOOR_LEFT_COLOR    = vec3(0.1, 0.3, 0.9);  // left under-fog light (blue/azure)
 const float FLOOR_LEFT_POWER    = 2.0;   // left light brightness
 const vec3  FLOOR_LEFT_POS      = vec3(-1.0, 0.0, 0.5); // left light XZ position (Y ignored)
@@ -212,15 +212,40 @@ void main() {
     // Deep navy background gradient
     vec3 col = mix(vec3(0.005, 0.01, 0.04), vec3(0.02, 0.04, 0.12), uv.y * 0.5 + 0.5);
 
-    // ── Ground plane with fog and under-surface lights ─────
-    bool hitFloor = false;
+    // Pre-compute floor intersection
+    float tFloor = -1.0;
     if (rd.y < -0.0001) {
-        float tFloor = (floorY - ro.y) / rd.y;
-        if (tFloor > 0.0) {
-            hitFloor = true;
+        tFloor = (floorY - ro.y) / rd.y;
+    }
+
+    // Intersect sphere
+    vec2 hit = iSphere(ro, rd, ballR);
+    if (hit.x > 0.0) {
+        // Back face (far side, seen through transparent sphere)
+        vec3 pBack = ro + rd * hit.y;
+        vec3 nBack = normalize(pBack);
+        vec4 back = shadeSphere(nBack, rd);
+        col = mix(col, back.rgb, back.a);
+
+        // Front face — only above the waterline
+        vec3 pFront = ro + rd * hit.x;
+        vec3 nFront = normalize(pFront);
+        if (pFront.y >= floorY) {
+            vec4 front = shadeSphere(nFront, rd);
+            col = mix(col, front.rgb, front.a);
+        }
+    }
+
+    // ── Floor fog drawn LAST — covers submerged sphere ─────
+    if (tFloor > 0.0) {
+        // Draw floor when: no sphere, floor closer than sphere, or sphere submerged
+        bool drawFloor = (hit.x < 0.0)
+                      || (tFloor < hit.x)
+                      || ((ro + rd * hit.x).y < floorY);
+        if (drawFloor) {
             vec3 fp = ro + rd * tFloor;
 
-            // Depth from camera — used to fade glow toward the horizon
+            // Depth from camera — fade glow toward horizon
             float depth = length(fp - ro);
             float horizonFade = 1.0 / (1.0 + depth * 0.04);
 
@@ -228,7 +253,6 @@ void main() {
             float dLx = fp.x - FLOOR_LEFT_POS.x;
             float dLz = fp.z - FLOOR_LEFT_POS.z;
             float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
-            // Extra wide blue ambient that covers the entire left
             float blueAmbient = smoothstep(2.0, -2.0, fp.x) * 0.4 * exp(-depth * 0.02);
 
             // Right light (magenta/purple) — tighter spot
@@ -243,26 +267,6 @@ void main() {
             vec3 fogCol = FOG_COLOR + underLight * (1.0 - FOG_DENSITY * 0.6) * horizonFade;
 
             col = fogCol;
-        }
-    }
-
-    // Intersect sphere
-    vec2 hit = iSphere(ro, rd, ballR);
-    if (hit.x > 0.0) {
-        // Back face first (far side, seen through transparent sphere)
-        vec3 pBack = ro + rd * hit.y;
-        vec3 nBack = normalize(pBack);
-        vec4 back = shadeSphere(nBack, rd);
-        col = mix(col, back.rgb, back.a);
-
-        // Front face — clip below floor to hide submerged part
-        vec3 pFront = ro + rd * hit.x;
-        vec3 nFront = normalize(pFront);
-        if (pFront.y >= floorY) {
-            vec4 front = shadeSphere(nFront, rd);
-            col = mix(col, front.rgb, front.a);
-        } else if (hitFloor) {
-            // Below floor line — show fog instead
         }
     }
 
