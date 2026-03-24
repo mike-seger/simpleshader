@@ -12,6 +12,7 @@ const SHADER_INDEX = [
       { name: "Champions Ball 2", path: "web/shaders/experimental/champions-ball-2.glsl" },
       { name: "Champions Ball 3", path: "web/shaders/experimental/champions-ball-3.glsl" },
       { name: "Champions Ball 4", path: "web/shaders/experimental/champions-ball-4.glsl" },
+      { name: "Champions Ball 5", path: "web/shaders/experimental/champions-ball-5.glsl" },
       { name: "Plasma Grid", path: "web/shaders/experimental/plasma-grid.glsl" },
       { name: "Plasma", path: "web/shaders/experimental/plasma.glsl" },
       { name: "Sliding Waves", path: "web/shaders/experimental/sliding-waves.glsl" },
