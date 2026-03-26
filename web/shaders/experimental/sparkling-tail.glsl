@@ -6,13 +6,13 @@ uniform float u_time;
 #define PI 3.14159265
 
 // @lil-gui-start
-const float ANIM_DURATION    = 3.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.32;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
+const float ANIM_DURATION    = 4.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
+const float HEAD_DIAMETER    = 0.28;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
 const float TAIL_LENGTH      = 2.45;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
-const float TAIL_WIDTH_HEAD  = 0.08;   // tail width at the head end // @range(0.01, 0.3, 0.005)
-const float TAIL_WIDTH_END   = 0.005;  // tail width at the tail tip // @range(0.0, 0.1, 0.001)
-const float SPARKLE_COUNT    = 50.0;   // sparkles (trail + head) // @range(0.0, 100.0, 1.0)
-const float GLOW_INTENSITY   = 1.5;    // overall brightness // @range(0.3, 5.0, 0.1)
+const float TAIL_WIDTH_HEAD  = 0.285;   // tail width at the head end // @range(0.01, 0.3, 0.005)
+const float TAIL_WIDTH_END   = 0.04;  // tail width at the tail tip // @range(0.0, 0.1, 0.001)
+const float SPARKLE_COUNT    = 0.0;   // sparkles (trail + head) // @range(0.0, 100.0, 1.0)
+const float GLOW_INTENSITY   = 1.7;    // overall brightness // @range(0.3, 5.0, 0.1)
 const vec4  HEAD_COLOR       = vec4(0.88, 0.93, 1.0, 1.0);  // head glow color
 const vec4  TAIL_START_COLOR = vec4(0.85, 0.9, 1.0, 1.0);   // tail color near head
 const vec4  TAIL_END_COLOR   = vec4(0.55, 0.65, 0.95, 0.0);  // tail color at tip
