@@ -5,17 +5,17 @@ uniform float u_time;
 
 #define PI 3.14159265
 
-
 // @lil-gui-start
-const float ANIM_DURATION    = 8.5;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.26;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
-const float HEAD_GLOW        = 0.0;    // head glow brightness // @range(0.0, 8.0, 0.1)
-const float TAIL_LENGTH      = 2.4;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
-const float TAIL_WIDTH_HEAD  = 0.475;  // tail width at the head end // @range(0.01, 1.0, 0.005)
-const float TAIL_WIDTH_END   = 0.494;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
+const float ANIM_DURATION    = 7.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
+const float HEAD_DIAMETER    = 0.09;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
+const float HEAD_GLOW        = 1.4;    // head glow brightness // @range(0.0, 4.0, 0.01)
+const float HEAD_SPIN        = 0.2;    // star rotation speed // @range(0.0, 3.0, 0.01)
+const float TAIL_LENGTH      = 1.65;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
+const float TAIL_WIDTH_HEAD  = 0.33;  // tail width at the head end // @range(0.01, 1.0, 0.005)
+const float TAIL_WIDTH_END   = 0.378;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
 const float GLOW_FREQ        = 0.34;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
 const float GLOW_AMP         = 0.45;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
-const float GLOW_INTENSITY   = 2.0;    // overall brightness // @range(0.3, 5.0, 0.1)
+const float GLOW_INTENSITY   = 1.7;    // overall brightness // @range(0.3, 5.0, 0.1)
 const vec4  HEAD_COLOR       = vec4(0.2863, 0.5569, 0.9333, 1.0);  // head glow color
 const vec4  TAIL_START_COLOR = vec4(0.1294, 0.3216, 0.7098, 1.0);   // tail color near head
 const vec4  TAIL_END_COLOR   = vec4(0.0118, 0.1451, 0.549, 0.0);  // tail color at tip
@@ -39,6 +39,12 @@ float sparkleStar(vec2 p, float size) {
 vec2 curvePoint(float t, float aspect) {
     float ct = clamp(t, -0.5, 2.0);
     return vec2(ct * aspect, 0.5 / sqrt(max(ct + 0.3, 0.001)));
+}
+
+// Z-depth follows same curve; perspective scale normalized to 1.0 at t=0.5
+float perspScale(float t) {
+    float ct = clamp(t, -0.5, 2.0);
+    return sqrt((ct + 0.3) / 0.8);
 }
 
 void main() {
@@ -78,8 +84,12 @@ void main() {
     // Glow pulsation
     float glowPulse = 1.0 + GLOW_AMP * sin(u_time * GLOW_FREQ * PI * 2.0);
 
-    // Trail glow (narrows from head to tail end)
-    float trailW = mix(TAIL_WIDTH_END, TAIL_WIDTH_HEAD, closestFade);
+    // Perspective scale at closest trail point
+    float closestT = headParam - (1.0 - closestFade) * tailParamLen;
+    float pScale = perspScale(closestT);
+
+    // Trail glow (narrows from head to tail end, scaled by perspective)
+    float trailW = mix(TAIL_WIDTH_END, TAIL_WIDTH_HEAD, closestFade) * pScale;
     float gd = minDist / max(trailW, 0.001);
     float trailGlow = exp(-gd * gd * 3.0) * closestFade;
     vec3 trailTint = mix(TAIL_END_COLOR.rgb, TAIL_START_COLOR.rgb, closestFade);
@@ -93,7 +103,8 @@ void main() {
     col += vec3(1.0) * coreGlow * GLOW_INTENSITY * glowPulse * 0.3 * trailAlpha;
 
     // ── Bright head ───────────────────────────────────────
-    float headR = HEAD_DIAMETER * 0.5;
+    float headPScale = perspScale(headParam);
+    float headR = HEAD_DIAMETER * 0.5 * headPScale;
     float headD = length(uv - headPos);
 
     // Soft outer halo
@@ -104,9 +115,14 @@ void main() {
     float headGlow = exp(-headD * headD / (headR * headR * 0.25));
     col += HEAD_COLOR.rgb * headGlow * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
 
-    // Central sparkle cross
+    // Sparkle cross: rotated normal to path + spin
     vec2 hp = uv - headPos;
-    float headSpark = sparkleStar(hp, headR * 0.6);
+    vec2 tang = curvePoint(headParam + 0.01, aspect) - curvePoint(headParam - 0.01, aspect);
+    float pathAngle = atan(tang.y, tang.x);
+    float spinAngle = pathAngle + u_time * HEAD_SPIN * PI * 2.0;
+    float cs = cos(spinAngle), sn = sin(spinAngle);
+    vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
+    float headSpark = sparkleStar(rhp, headR * 0.6);
     col += vec3(1.0) * headSpark * 0.12 * GLOW_INTENSITY;
 
     // ── Tone mapping ──────────────────────────────────────
