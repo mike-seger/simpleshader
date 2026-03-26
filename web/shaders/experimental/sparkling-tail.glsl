@@ -5,16 +5,17 @@ uniform float u_time;
 
 #define PI 3.14159265
 
+
 // @lil-gui-start
-const float ANIM_DURATION    = 4.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.28;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
-const float HEAD_GLOW        = 2.6;    // head glow brightness // @range(0.0, 8.0, 0.1)
-const float TAIL_LENGTH      = 2.45;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
-const float TAIL_WIDTH_HEAD  = 0.285;  // tail width at the head end // @range(0.01, 0.3, 0.005)
-const float TAIL_WIDTH_END   = 0.04;   // tail width at the tail tip // @range(0.0, 0.1, 0.001)
-const float GLOW_FREQ        = 0.0;    // glow pulsation frequency // @range(0.0, 40.0, 1.0)
-const float GLOW_AMP         = 0.8;    // glow pulsation amplitude // @range(0.0, 1.0, 0.05)
-const float GLOW_INTENSITY   = 5.0;    // overall brightness // @range(0.3, 5.0, 0.1)
+const float ANIM_DURATION    = 8.5;    // seconds per cycle // @range(0.0, 10.0, 0.5)
+const float HEAD_DIAMETER    = 0.26;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
+const float HEAD_GLOW        = 0.0;    // head glow brightness // @range(0.0, 8.0, 0.1)
+const float TAIL_LENGTH      = 2.4;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
+const float TAIL_WIDTH_HEAD  = 0.475;  // tail width at the head end // @range(0.01, 1.0, 0.005)
+const float TAIL_WIDTH_END   = 0.494;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
+const float GLOW_FREQ        = 0.34;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
+const float GLOW_AMP         = 0.45;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
+const float GLOW_INTENSITY   = 2.0;    // overall brightness // @range(0.3, 5.0, 0.1)
 const vec4  HEAD_COLOR       = vec4(0.2863, 0.5569, 0.9333, 1.0);  // head glow color
 const vec4  TAIL_START_COLOR = vec4(0.1294, 0.3216, 0.7098, 1.0);   // tail color near head
 const vec4  TAIL_END_COLOR   = vec4(0.0118, 0.1451, 0.549, 0.0);  // tail color at tip
