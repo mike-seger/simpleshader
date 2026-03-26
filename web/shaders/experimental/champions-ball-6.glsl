@@ -1,3 +1,4 @@
+#extension GL_OES_standard_derivatives : enable
 precision highp float;
 
 uniform vec2 u_resolution;
@@ -9,7 +10,7 @@ uniform float u_time;
 // @lil-gui-start
 const float STAR_SIZE           = 1.6;   // 1.0 = default, larger = bigger stars
 const float STAR_INNER_RATIO    = 0.39;  // inner/outer corner radius ratio (0.38 = sharp star, 1.0 = decagon)
-const vec4  STAR_COLOR          = vec4(0.0902, 0.1255, 0.451, 0.95); // star fill color (rgb + opacity)
+const vec4  STAR_COLOR          = vec4(0.8706, 0.8745, 0.9098, 0.95); // star fill color (rgb + opacity)
 const float STAR_INTENSITY      = 1.5;   // star fill brightness multiplier
 const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
 const vec4  STAR_EDGE_COLOR     = vec4(0.8392, 0.9216, 1.0, 1.0);   // blue-cyan edge color
@@ -35,8 +36,14 @@ const vec3  FLOOR_RIGHT_COLOR   = vec3(0.75, 0.0505, 0.85); // right under-fog l
 const float FLOOR_RIGHT_POWER   = 6.174;   // right light brightness
 const vec3  FLOOR_RIGHT_POS     = vec3(2.353, 0.166, -0.588);  // right light XZ position (Y ignored)
 const float FOG_DENSITY         = 1.309;  // fog opacity over the floor
-const vec3  FOG_COLOR           = vec3(0.0082, -0.0252, 0.06); // fog base tint
-// @lil-gui-end
+const vec3  FOG_COLOR           = vec3(0.0082, -0.0252, 0.06); // fog base tint/ @lil-gui-end
+
+// ── tanh approximation (not in GLSL ES 1.00) ──────────────
+vec4 tanh_safe(vec4 x) {
+    vec4 cx = clamp(x, -10.0, 10.0);
+    vec4 e2 = exp(2.0 * cx);
+    return (e2 - 1.0) / (e2 + 1.0);
+}
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
@@ -200,145 +207,56 @@ void main() {
     float s = min(u_resolution.x, u_resolution.y);
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / s;
 
-    // Camera
     vec3 ro = vec3(0.0, 0.0, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
 
     float ballR = SPHERE_SIZE;
-
-    // Floor plane: sphere sinks FLOOR_SINK * diameter into it
-    float floorY = -ballR + ballR * 2.0 * FLOOR_SINK;
-
-    // Deep navy background gradient
-    vec3 col = mix(vec3(0.005, 0.01, 0.04), vec3(0.02, 0.04, 0.12), uv.y * 0.5 + 0.5);
-
-    // Pre-compute floor intersection
-    float tFloor = -1.0;
-    if (rd.y < -0.0001) {
-        tFloor = (floorY - ro.y) / rd.y;
-    }
-
-    // Intersect sphere
     vec2 hit = iSphere(ro, rd, ballR);
-    if (hit.x > 0.0) {
-        // Back face (far side, seen through transparent sphere)
-        vec3 pBack = ro + rd * hit.y;
-        vec3 nBack = normalize(pBack);
-        vec4 back = shadeSphere(nBack, rd);
-        col = mix(col, back.rgb, back.a);
 
-        vec3 pFront = ro + rd * hit.x;
-        vec3 nFront = normalize(pFront);
-
-        // Floor fog inside the sphere — lit fog visible through the glass
-        if (tFloor > hit.x && tFloor < hit.y) {
-            vec3 fp = ro + rd * tFloor;
-            float depth = length(fp - ro);
-            float horizonFade = 1.0 / (1.0 + depth * 0.04);
-            float dLx = fp.x - FLOOR_LEFT_POS.x;
-            float dLz = fp.z - FLOOR_LEFT_POS.z;
-            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
-            float blueAmb = smoothstep(2.0, -2.0, fp.x) * 0.4 * exp(-depth * 0.02);
-            float dR = length(fp.xz - FLOOR_RIGHT_POS.xz);
-            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
-            vec3 uLight = FLOOR_LEFT_COLOR * (glowL + blueAmb) + FLOOR_RIGHT_COLOR * glowR;
-            vec3 innerFog = max(FOG_COLOR, vec3(0.0)) + uLight * 0.5 * horizonFade;
-            // Drift animation
-            float drift = 0.85 + 0.15 * sin(fp.x * 3.0 + u_time * 0.3) * cos(fp.z * 2.0 + u_time * 0.2);
-            innerFog *= drift;
-            col = mix(col, innerFog, 0.85);
+    // ── Cloud ray march (adapted from cloudy-planet) ───────
+    vec4 acc = vec4(0.0);
+    float z = 0.0;
+    for (int ii = 1; ii <= 80; ii++) {
+        vec3 p = ro + z * rd;
+        vec3 c = p;
+        c.z *= 3.0;
+        for (int fi = 2; fi <= 9; fi++) {
+            float f = float(fi);
+            c += sin(c.yzx * f + z + u_time * CLOUD_SPEED) / f;
         }
+        float cloud = CLOUD_FLOOR + abs(CLOUD_DENSITY * c.y + abs(p.y + CLOUD_Y_OFFSET));
 
-        // Rising fog haze above the waterline (glow mist)
-        float hazeHeight = ballR * 0.2;
-        float hazeY = pFront.y - floorY;
-        if (hazeY > -hazeHeight * 0.5 && hazeY < hazeHeight) {
-            // Fog strength: peaks at floor level, fades above
-            float hazeFrac = 1.0 - clamp(hazeY / hazeHeight, 0.0, 1.0);
-            hazeFrac *= hazeFrac;
-            // Get floor glow at this XZ
-            float depth = length(pFront);
-            float horizonFade = 1.0 / (1.0 + depth * 0.04);
-            float dLx = pFront.x - FLOOR_LEFT_POS.x;
-            float dLz = pFront.z - FLOOR_LEFT_POS.z;
-            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
-            float blueAmb = smoothstep(2.0, -2.0, pFront.x) * 0.4 * exp(-depth * 0.02);
-            float dR = length(pFront.xz - FLOOR_RIGHT_POS.xz);
-            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
-            vec3 uLight = FLOOR_LEFT_COLOR * (glowL + blueAmb) + FLOOR_RIGHT_COLOR * glowR;
-            vec3 haze = max(FOG_COLOR, vec3(0.0)) + uLight * 0.4 * horizonFade;
-            float drift = 0.8 + 0.2 * sin(pFront.x * 2.5 + u_time * 0.25) * cos(pFront.z * 1.8 - u_time * 0.15);
-            haze *= drift;
-            col = mix(col, haze, hazeFrac * 0.5);
-        }
+        // Sphere SDF — march around the ball, don't enter it
+        float sd = length(p) - ballR - 0.05;
+        z += min(cloud, max(sd, 0.01)) / 7.0;
 
-        // Front face — wide soft fade near waterline
-        float fogBand = ballR * 0.15;
-        float waterFade = smoothstep(floorY - fogBand * 0.3, floorY + fogBand, pFront.y);
-        if (waterFade > 0.001) {
-            vec4 front = shadeSphere(nFront, rd);
-            col = mix(col, front.rgb, front.a * waterFade);
-        }
-    }
+        // Accumulate cloud color only outside sphere
+        if (sd > 0.0) {
+            vec4 cloudCol = vec4(CLOUD_TINT + vec3(0.0, 0.0, z * 0.3), 0.0);
+            acc += cloudCol / max(cloud, 0.001)
+                 - min(dFdx(z) * s + z, 0.0) / exp(sd * sd / 0.1);
 
-    // ── Floor fog drawn LAST — covers submerged sphere ─────
-    if (tFloor > 0.0) {
-        bool noSphere = (hit.x < 0.0);
-        bool floorCloser = (tFloor < hit.x);
-        bool submerged = !noSphere && !floorCloser && ((ro + rd * hit.x).y < floorY);
-        bool drawFloor = noSphere || floorCloser || submerged;
-        if (drawFloor) {
-            vec3 fp = ro + rd * tFloor;
-
-            // Depth from camera — fade glow toward horizon
-            float depth = length(fp - ro);
-            float horizonFade = 1.0 / (1.0 + depth * 0.04);
-
-            // Left light (blue/azure) — wide spread covering the left side
-            float dLx = fp.x - FLOOR_LEFT_POS.x;
-            float dLz = fp.z - FLOOR_LEFT_POS.z;
-            float glowL = exp(-(dLx * dLx * 0.06 + dLz * dLz * 0.08)) * FLOOR_LEFT_POWER;
-            float blueAmbient = smoothstep(2.0, -2.0, fp.x) * 0.4 * exp(-depth * 0.02);
-
-            // Right light (magenta/purple) — tighter spot
-            float dR = length(fp.xz - FLOOR_RIGHT_POS.xz);
-            float glowR = exp(-dR * dR * 0.4) * FLOOR_RIGHT_POWER;
-
-            // Combined under-fog light bleeding through
-            vec3 underLight = FLOOR_LEFT_COLOR * (glowL + blueAmbient)
-                            + FLOOR_RIGHT_COLOR * glowR;
-
-            // Fog fully covers the floor — lights attenuated by fog density
-            vec3 fogCol = FOG_COLOR + underLight * (1.0 - FOG_DENSITY * 0.6) * horizonFade;
-
-            // Soft blend at sphere silhouette edge to avoid sharp fog/sphere line
-            float fogAlpha = 1.0;
-            if (submerged) {
-                // How far below floorY the sphere surface is — fade fog in gradually
-                float frontY = (ro + rd * hit.x).y;
-                float fadeDepth = ballR * 0.12;  // transition band
-                fogAlpha = smoothstep(0.0, -fadeDepth, frontY - floorY);
+            // Sphere neon glow bleeding into nearby clouds
+            if (sd < ballR * 0.8) {
+                float glowFalloff = exp(-sd * sd * 2.0);
+                float lr = smoothstep(-0.3, 0.3, p.x);
+                vec3 glowCol = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr);
+                acc.rgb += glowCol * glowFalloff * CLOUD_GLOW / max(cloud, 0.01);
             }
-            col = mix(col, fogCol, fogAlpha);
         }
     }
 
-    // ── Horizon haze — fog glow above the floor line ───────
-    // Floor horizon is at uv.y ≈ 0 (camera above floor plane).
-    // Blend fog color into the sky near the horizon for a seamless transition.
-    {
-        bool sphereCovers = (hit.x > 0.0) && ((ro + rd * hit.x).y > floorY + ballR * 0.1);
-        if (!sphereCovers) {
-            float haze = exp(-uv.y * uv.y * 25.0); // gaussian centered on horizon
-            // Below horizon (uv.y < 0) let floor handle it — only boost the top edge
-            if (uv.y < -0.02) haze *= smoothstep(-0.08, -0.02, uv.y);
-            // Color: left/right floor lights blended by screen position
-            float lr = smoothstep(-0.8, 0.8, uv.x);
-            vec3 hazeCol = mix(FLOOR_LEFT_COLOR * FLOOR_LEFT_POWER,
-                               FLOOR_RIGHT_COLOR * FLOOR_RIGHT_POWER, lr) * 0.12;
-            hazeCol += max(FOG_COLOR, vec3(0.0)) * 0.3;
-            col = mix(col, hazeCol, haze * 0.55);
-        }
+    vec3 col = tanh_safe(acc / CLOUD_BRIGHTNESS).rgb;
+
+    // ── Render sphere ──────────────────────────────────────
+    if (hit.x > 0.0) {
+        vec3 nBack = normalize(ro + rd * hit.y);
+        vec4 back = shadeSphere(nBack, rd);
+        col = mix(col, back.rgb, back.a * 0.5);
+
+        vec3 nFront = normalize(ro + rd * hit.x);
+        vec4 front = shadeSphere(nFront, rd);
+        col = mix(col, front.rgb, front.a);
     }
 
     gl_FragColor = vec4(col, 1.0);
