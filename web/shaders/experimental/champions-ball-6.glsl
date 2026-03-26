@@ -215,24 +215,33 @@ void main() {
     vec4 accFront = vec4(0.0);  // clouds between camera and sphere
     vec4 accBack  = vec4(0.0);  // clouds behind sphere (+ miss rays)
     float z = 0.0;
-    for (int ii = 1; ii <= 80; ii++) {
+    float cloudTime = u_time * CLOUD_SPEED;
+    for (int ii = 1; ii <= 50; ii++) {
         vec3 p = ro + z * rd;
-        vec3 c = p;
-        c.z *= 3.0;
-        for (int fi = 2; fi <= 9; fi++) {
-            float f = float(fi);
-            c += sin(c.yzx * f + z + u_time * CLOUD_SPEED) / f;
-        }
-        float cloud = CLOUD_FLOOR + abs(CLOUD_DENSITY * c.y + abs(p.y + CLOUD_Y_OFFSET));
 
         // Sphere SDF — march around the ball, don't enter it
         float sd = length(p) - ballR;
-        z += min(cloud, max(sd, 0.01)) / 7.0;
+
+        // Skip sphere interior quickly
+        if (sd < -0.01) {
+            z += -sd;
+            continue;
+        }
+
+        vec3 c = p;
+        c.z *= 3.0;
+        float f2 = 2.0; c += sin(c.yzx * f2 + z + cloudTime) * 0.5;
+        float f3 = 3.0; c += sin(c.yzx * f3 + z + cloudTime) / f3;
+        float f4 = 4.0; c += sin(c.yzx * f4 + z + cloudTime) * 0.25;
+        float f5 = 5.0; c += sin(c.yzx * f5 + z + cloudTime) * 0.2;
+        float f6 = 6.0; c += sin(c.yzx * f6 + z + cloudTime) / f6;
+        float cloud = CLOUD_FLOOR + abs(CLOUD_DENSITY * c.y + abs(p.y + CLOUD_Y_OFFSET));
+
+        z += min(cloud, max(sd, 0.01)) * 0.2;
 
         // Accumulate cloud color only outside sphere
         if (sd > 0.01) {
-            vec4 cloudCol = vec4(CLOUD_TINT + vec3(0.0, 0.0, z * 0.3), 0.0);
-            vec4 contrib = cloudCol / max(cloud, 0.001);
+            vec4 contrib = vec4((CLOUD_TINT + vec3(0.0, 0.0, z * 0.3)) / max(cloud, 0.001), 0.0);
 
             // Sphere neon glow bleeding into nearby clouds
             if (sd < ballR * 0.8) {
@@ -249,6 +258,9 @@ void main() {
                 accBack += contrib;
             }
         }
+
+        // Early out when clouds are saturated
+        if (accBack.r + accBack.g + accBack.b > CLOUD_BRIGHTNESS * 3.0) break;
     }
 
     // Background: clouds behind sphere (or all clouds for miss rays)
