@@ -28,16 +28,14 @@ const float SPIN_RATIO          = 0.61;   // secondary axis speed as fraction of
 const float SPIN_ANGLE1         = 92.0;  // initial angle of primary axis (degrees)
 const float SPIN_ANGLE2         = 150.0; // initial angle of secondary axis (degrees)
 const float PULSE_FREQ          = 2.0;   // brightness pulse frequency (Hz)
-const float FLOOR_SINK          = 0.2;   // how deep sphere sinks into floor (fraction of diameter)
-const vec3  FLOOR_LEFT_COLOR    = vec3(0.1, 0.3, 0.9);  // left under-fog light (blue/azure)
-const float FLOOR_LEFT_POWER    = 2.88;   // left light brightness
-const vec3  FLOOR_LEFT_POS      = vec3(-1.78, 0.0, -0.66); // left light XZ position (Y ignored)
-const vec3  FLOOR_RIGHT_COLOR   = vec3(0.75, 0.0505, 0.85); // right under-fog light (magenta/purple)
-const float FLOOR_RIGHT_POWER   = 6.174;   // right light brightness
-const vec3  FLOOR_RIGHT_POS     = vec3(2.353, 0.166, -0.588);  // right light XZ position (Y ignored)
-const float FOG_DENSITY         = 1.309;  // fog opacity over the floor
-const vec3  FOG_COLOR           = vec3(0.0082, -0.0252, 0.06); // fog base tint/ @lil-gui-end
-
+const float CLOUD_SPEED         = 0.3;   // cloud animation speed
+const float CLOUD_DENSITY       = 0.2;   // cloud thickness
+const float CLOUD_FLOOR         = 0.1;   // minimum cloud distance
+const float CLOUD_Y_OFFSET      = 0.8;   // vertical offset of cloud band
+const float CLOUD_BRIGHTNESS    = 2000.0; // tone-mapping divisor (higher = darker)
+const vec3  CLOUD_TINT          = vec3(1.5, 2.0, 4.0); // cloud color tint
+const float CLOUD_GLOW          = 0.4;   // sphere glow bleeding into clouds
+// @lil-gui-end
 // ── tanh approximation (not in GLSL ES 1.00) ──────────────
 vec4 tanh_safe(vec4 x) {
     vec4 cx = clamp(x, -10.0, 10.0);
