@@ -1,4 +1,3 @@
-#extension GL_OES_standard_derivatives : enable
 precision highp float;
 
 uniform vec2 u_resolution;
@@ -210,9 +209,11 @@ void main() {
 
     float ballR = SPHERE_SIZE;
     vec2 hit = iSphere(ro, rd, ballR);
+    bool hitsphere = hit.x > 0.0;
 
     // ── Cloud ray march (adapted from cloudy-planet) ───────
-    vec4 acc = vec4(0.0);
+    vec4 accFront = vec4(0.0);  // clouds between camera and sphere
+    vec4 accBack  = vec4(0.0);  // clouds behind sphere (+ miss rays)
     float z = 0.0;
     for (int ii = 1; ii <= 80; ii++) {
         vec3 p = ro + z * rd;
@@ -225,29 +226,36 @@ void main() {
         float cloud = CLOUD_FLOOR + abs(CLOUD_DENSITY * c.y + abs(p.y + CLOUD_Y_OFFSET));
 
         // Sphere SDF — march around the ball, don't enter it
-        float sd = length(p) - ballR - 0.05;
+        float sd = length(p) - ballR;
         z += min(cloud, max(sd, 0.01)) / 7.0;
 
         // Accumulate cloud color only outside sphere
-        if (sd > 0.0) {
+        if (sd > 0.01) {
             vec4 cloudCol = vec4(CLOUD_TINT + vec3(0.0, 0.0, z * 0.3), 0.0);
-            acc += cloudCol / max(cloud, 0.001)
-                 - min(dFdx(z) * s + z, 0.0) / exp(sd * sd / 0.1);
+            vec4 contrib = cloudCol / max(cloud, 0.001);
 
             // Sphere neon glow bleeding into nearby clouds
             if (sd < ballR * 0.8) {
                 float glowFalloff = exp(-sd * sd * 2.0);
                 float lr = smoothstep(-0.3, 0.3, p.x);
                 vec3 glowCol = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr);
-                acc.rgb += glowCol * glowFalloff * CLOUD_GLOW / max(cloud, 0.01);
+                contrib.rgb += glowCol * glowFalloff * CLOUD_GLOW / max(cloud, 0.01);
+            }
+
+            // Split into front (before sphere) and back (behind sphere)
+            if (hitsphere && z < hit.x) {
+                accFront += contrib;
+            } else {
+                accBack += contrib;
             }
         }
     }
 
-    vec3 col = tanh_safe(acc / CLOUD_BRIGHTNESS).rgb;
+    // Background: clouds behind sphere (or all clouds for miss rays)
+    vec3 col = tanh_safe(accBack / CLOUD_BRIGHTNESS).rgb;
 
     // ── Render sphere ──────────────────────────────────────
-    if (hit.x > 0.0) {
+    if (hitsphere) {
         vec3 nBack = normalize(ro + rd * hit.y);
         vec4 back = shadeSphere(nBack, rd);
         col = mix(col, back.rgb, back.a * 0.5);
@@ -256,6 +264,12 @@ void main() {
         vec4 front = shadeSphere(nFront, rd);
         col = mix(col, front.rgb, front.a);
     }
+
+    // Overlay front clouds on top of sphere (clouds occlude lower sphere)
+    vec3 frontCol = tanh_safe(accFront / CLOUD_BRIGHTNESS).rgb;
+    float frontLum = dot(frontCol, vec3(0.2, 0.4, 0.4));
+    float frontAlpha = clamp(frontLum * 3.0, 0.0, 0.9);
+    col = mix(col, frontCol, frontAlpha);
 
     gl_FragColor = vec4(col, 1.0);
 }
