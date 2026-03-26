@@ -17,6 +17,7 @@ const SHADER_INDEX = [
       { name: "Plasma Grid", path: "web/shaders/experimental/plasma-grid.glsl" },
       { name: "Plasma", path: "web/shaders/experimental/plasma.glsl" },
       { name: "Sliding Waves", path: "web/shaders/experimental/sliding-waves.glsl" },
+      { name: "Sparkling Tail", path: "web/shaders/experimental/sparkling-tail.glsl" },
     ],
   },
   {

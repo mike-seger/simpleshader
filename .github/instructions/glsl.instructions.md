@@ -49,6 +49,8 @@ const bool  GRID = true;          // checkbox
 
 Name suffixes that trigger special widgets: `*_COLOR` (vec4) → color picker + alpha; `*_DIR` (vec3) → direction sliders.
 
+Always name RGBA color constants ending with `_COLOR` (e.g. `HEAD_COLOR`, `TAIL_START_COLOR`, `TAIL_END_COLOR`) so the tuner auto-generates color pickers.
+
 Gate pattern: a `const bool NAME` followed by `NAME_*` siblings → the bool becomes a toggle that shows/hides the group.
 
 ## @include Libraries
