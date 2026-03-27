@@ -7,11 +7,13 @@ uniform float u_time;
 
 // @lil-gui-start
 const float ANIM_DURATION    = 7.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.09;   // head size (fraction of height) // @range(0.05, 0.5, 0.01)
-const float HEAD_GLOW        = 1.4;    // head glow brightness // @range(0.0, 4.0, 0.01)
+const float HEAD_DIAMETER    = 0.09;   // head size (fraction of height) // @range(0.05, 1.0, 0.01)
+const float HEAD_POINTS      = 5.0;    // number of star points // @range(3.0, 15.0, 1.0)
+const float HEAD_INNER_R     = 0.47;    // inner radius ratio // @range(0.0, 1.0, 0.01)
+const float HEAD_GLOW        = 0.78;    // head glow brightness // @range(0.0, 4.0, 0.01)
 const float HEAD_SPIN        = 0.2;    // star rotation speed // @range(0.0, 3.0, 0.01)
 const float TAIL_LENGTH      = 1.65;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
-const float TAIL_WIDTH_HEAD  = 0.33;  // tail width at the head end // @range(0.01, 1.0, 0.005)
+const float TAIL_WIDTH_HEAD  = 0.17;  // tail width at the head end // @range(0.01, 1.0, 0.005)
 const float TAIL_WIDTH_END   = 0.378;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
 const float GLOW_FREQ        = 0.34;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
 const float GLOW_AMP         = 0.45;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
@@ -21,17 +23,15 @@ const vec4  TAIL_START_COLOR = vec4(0.1294, 0.3216, 0.7098, 1.0);   // tail colo
 const vec4  TAIL_END_COLOR   = vec4(0.0118, 0.1451, 0.549, 0.0);  // tail color at tip
 // @lil-gui-end
 
-// ── 4-pointed star sparkle shape ──────────────────────────
-float sparkleStar(vec2 p, float size) {
-    vec2 ap = abs(p);
-    float c1 = max(ap.x * 10.0, ap.y) / size;
-    float c2 = max(ap.x, ap.y * 10.0) / size;
-    float d = min(c1, c2);
-    vec2 rp = vec2(p.x + p.y, p.x - p.y) * 0.7071;
-    vec2 arp = abs(rp);
-    float c3 = max(arp.x * 7.0, arp.y) / size;
-    float c4 = max(arp.x, arp.y * 7.0) / size;
-    d = min(d, min(c3, c4));
+// ── N-pointed star sparkle shape ──────────────────────────
+float sparkleStar(vec2 p, float size, float points, float innerR) {
+    float r = length(p);
+    float a = atan(p.y, p.x);
+    float sector = PI / points;
+    float sa = mod(a + sector, 2.0 * sector) - sector;
+    float f = abs(sa) / sector;  // 0 at tip, 1 at valley
+    float starR = mix(size, size * innerR, f);
+    float d = r / max(starR, 0.001);
     return 1.0 / (d * d + 0.5);
 }
 
@@ -122,7 +122,7 @@ void main() {
     float spinAngle = pathAngle + u_time * HEAD_SPIN * PI * 2.0;
     float cs = cos(spinAngle), sn = sin(spinAngle);
     vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
-    float headSpark = sparkleStar(rhp, headR * 0.6);
+    float headSpark = sparkleStar(rhp, headR * 0.6, HEAD_POINTS, HEAD_INNER_R);
     col += vec3(1.0) * headSpark * 0.12 * GLOW_INTENSITY;
 
     // ── Tone mapping ──────────────────────────────────────
