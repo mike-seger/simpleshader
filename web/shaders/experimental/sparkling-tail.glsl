@@ -46,7 +46,7 @@ float hash1(float n) {
 // ── Curve with precomputed rotation ─────────────────
 vec2 curveBase(float t, float aspect) {
     float ct = clamp(t, -0.5, 2.0);
-    return vec2(ct * aspect, 0.5 / sqrt(max(ct + 0.3, 0.001)));
+    return vec2(ct * aspect, 0.5 * inversesqrt(max(ct + 0.3, 0.001)));
 }
 
 vec2 curvePoint(float t, float aspect, vec2 origin, float ca, float sa) {
@@ -57,7 +57,7 @@ vec2 curvePoint(float t, float aspect, vec2 origin, float ca, float sa) {
 // Z-depth follows same curve; perspective scale normalized to 1.0 at t=0.5
 float perspScale(float t) {
     float ct = clamp(t, -0.5, 2.0);
-    return sqrt((ct + 0.3) / 0.8);
+    return (ct + 0.3) * 1.25;  // linear approx, 1.0 at t=0.5
 }
 
 void main() {
@@ -121,18 +121,19 @@ void main() {
         // ── Trail glow: closest distance to curve segments
         float minDist = 1e9;
         float closestFade = 0.0;
-        for (int i = 0; i < 30; i++) {
-            float f0 = float(i) / 30.0;
-            float f1 = float(i + 1) / 30.0;
-            vec2 p0 = curvePoint(headParam - f0 * tailParamLen, aspect, cOrigin, cca, csa);
-            vec2 p1 = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
-            vec2 seg = p1 - p0;
-            float proj = clamp(dot(uv - p0, seg) / dot(seg, seg), 0.0, 1.0);
-            float d = length(uv - (p0 + seg * proj));
+        vec2 prevPt = curvePoint(headParam, aspect, cOrigin, cca, csa);
+        for (int i = 0; i < 20; i++) {
+            float f1 = float(i + 1) / 20.0;
+            vec2 nextPt = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
+            vec2 seg = nextPt - prevPt;
+            float proj = clamp(dot(uv - prevPt, seg) / dot(seg, seg), 0.0, 1.0);
+            float d = length(uv - (prevPt + seg * proj));
             if (d < minDist) {
                 minDist = d;
+                float f0 = float(i) / 20.0;
                 closestFade = 1.0 - mix(f0, f1, proj);
             }
+            prevPt = nextPt;
         }
 
         // Perspective scale at closest trail point
@@ -168,11 +169,11 @@ void main() {
         float headGlow = exp(-headD * headD / (headR * headR * 0.25));
         col += HEAD_COLOR.rgb * headGlow * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
 
-        // Sparkle: rotated normal to path + spin
+        // Sparkle: use cached tangent from trail direction
         vec2 hp = uv - headPos;
-        vec2 tang = curvePoint(headParam + 0.01, aspect, cOrigin, cca, csa)
-                   - curvePoint(headParam - 0.01, aspect, cOrigin, cca, csa);
-        float pathAngle = atan(tang.y, tang.x);
+        vec2 tang = curveBase(headParam + 0.02, aspect) - curveBase(headParam - 0.02, aspect);
+        vec2 rtang = vec2(tang.x * cca - tang.y * csa, tang.x * csa + tang.y * cca);
+        float pathAngle = atan(rtang.y, rtang.x);
         float spinAngle = pathAngle + u_time * HEAD_SPIN * vSpin * PI * 2.0;
         float cs = cos(spinAngle), sn = sin(spinAngle);
         vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
