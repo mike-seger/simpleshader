@@ -7,23 +7,23 @@ uniform float u_time;
 
 // @lil-gui-start
 const float ANIM_DURATION    = 7.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.09;   // head size (fraction of height) // @range(0.05, 1.0, 0.01)
+const float HEAD_DIAMETER    = 0.14;   // head size (fraction of height) // @range(0.05, 1.0, 0.01)
 const float HEAD_POINTS      = 5.0;    // number of star points // @range(3.0, 15.0, 1.0)
 const float HEAD_INNER_R     = 0.47;    // inner radius ratio // @range(0.0, 1.0, 0.01)
-const float HEAD_GLOW        = 0.78;    // head glow brightness // @range(0.0, 4.0, 0.01)
+const float HEAD_GLOW        = 0.33;    // head glow brightness // @range(0.0, 4.0, 0.01)
 const float HEAD_SPIN        = 0.2;    // star rotation speed // @range(0.0, 3.0, 0.01)
 const float TAIL_LENGTH      = 1.65;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
 const float TAIL_WIDTH_HEAD  = 0.17;  // tail width at the head end // @range(0.01, 1.0, 0.005)
 const float TAIL_WIDTH_END   = 0.378;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
-const float GLOW_FREQ        = 0.34;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
-const float GLOW_AMP         = 0.45;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
-const float GLOW_INTENSITY   = 1.7;    // overall brightness // @range(0.3, 5.0, 0.1)
+const float GLOW_FREQ        = 0.11;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
+const float GLOW_AMP         = 0.36;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
+const float GLOW_INTENSITY   = 1.6;    // overall brightness // @range(0.3, 5.0, 0.1)
 const vec4  HEAD_COLOR       = vec4(0.2863, 0.5569, 0.9333, 1.0);  // head glow color
 const vec4  TAIL_START_COLOR = vec4(0.1294, 0.3216, 0.7098, 1.0);   // tail color near head
 const vec4  TAIL_END_COLOR   = vec4(0.0118, 0.1451, 0.549, 0.0);  // tail color at tip
-const float STAR_COUNT       = 1.0;    // number of stars // @range(1.0, 10.0, 1.0)
-const float STAR_CONCURRENCY = 1.0;    // stars visible at once // @range(1.0, 10.0, 1.0)
-const float STAR_VARIANCE    = 0.3;    // size/path randomness // @range(0.0, 1.0, 0.01)
+const float STAR_COUNT       = 8.0;    // number of stars // @range(1.0, 10.0, 1.0)
+const float STAR_CONCURRENCY = 6.0;    // stars visible at once // @range(1.0, 10.0, 1.0)
+const float STAR_VARIANCE    = 0.84;    // size/path randomness // @range(0.0, 1.0, 0.01)
 // @lil-gui-end
 
 // ── N-pointed star sparkle shape ──────────────────────────
@@ -43,10 +43,15 @@ float hash1(float n) {
     return fract(sin(n) * 43758.5453123);
 }
 
-// ── Curve with y-offset ───────────────────────────────────
-vec2 curvePoint(float t, float aspect, float yOff) {
+// ── Curve with precomputed rotation ─────────────────
+vec2 curveBase(float t, float aspect) {
     float ct = clamp(t, -0.5, 2.0);
-    return vec2(ct * aspect, 0.5 / sqrt(max(ct + 0.3, 0.001)) + yOff);
+    return vec2(ct * aspect, 0.5 / sqrt(max(ct + 0.3, 0.001)));
+}
+
+vec2 curvePoint(float t, float aspect, vec2 origin, float ca, float sa) {
+    vec2 rel = curveBase(t, aspect) - origin;
+    return origin + vec2(rel.x * ca - rel.y * sa, rel.x * sa + rel.y * ca);
 }
 
 // Z-depth follows same curve; perspective scale normalized to 1.0 at t=0.5
@@ -64,18 +69,24 @@ void main() {
     // Glow pulsation (shared)
     float glowPulse = 1.0 + GLOW_AMP * sin(u_time * GLOW_FREQ * PI * 2.0);
 
+    // Shared curve origin (entry point at t=-0.15)
+    vec2 cOrigin = curveBase(-0.15, aspect);
+
     // ── Per-star loop ─────────────────────────────────────
     for (int si = 0; si < 10; si++) {
         if (float(si) >= STAR_COUNT) break;
         float fi = float(si);
 
-        // Per-star variance: size, tail, timing, y-offset
+        // Per-star variance: size, tail, timing, angle spread
         float vSize   = 1.0 + (hash1(fi * 7.13) - 0.5) * STAR_VARIANCE;
         float vTail   = 1.0 + (hash1(fi * 11.37) - 0.5) * STAR_VARIANCE;
         float vWidth  = 1.0 + (hash1(fi * 3.77) - 0.5) * STAR_VARIANCE;
         float vTime   = hash1(fi * 5.91) * STAR_VARIANCE;
-        float vYOff   = (hash1(fi * 9.23) - 0.5) * STAR_VARIANCE * 0.4;
+        float vAngle  = (hash1(fi * 9.23) - 0.5) * STAR_VARIANCE * 0.5;
         float vSpin   = 1.0 + (hash1(fi * 13.7) - 0.5) * STAR_VARIANCE;
+
+        // Precompute rotation for this star
+        float cca = cos(vAngle), csa = sin(vAngle);
 
         float sTailLen = TAIL_LENGTH * vTail;
         float sHeadDia = HEAD_DIAMETER * vSize;
@@ -89,16 +100,32 @@ void main() {
         float stagger = fi / max(STAR_CONCURRENCY, 1.0);
         float cycle = mod(u_time / ANIM_DURATION + stagger + vTime, 1.0);
         float headParam = entryParam + cycle * totalRange;
-        vec2 headPos = curvePoint(headParam, aspect, vYOff);
+        vec2 headPos = curvePoint(headParam, aspect, cOrigin, cca, csa);
+
+        // Early skip: if head is far from pixel, skip trail computation
+        float headDist = length(uv - headPos);
+        float maxReach = max(sTailLen, TAIL_WIDTH_HEAD * vWidth) * 1.5;
+        if (headDist > maxReach) {
+            // Still render head glow if close enough
+            float headPScale = perspScale(headParam);
+            float headR = sHeadDia * 0.5 * headPScale;
+            if (headDist < headR * 6.0) {
+                float halo = exp(-headDist * headDist / (headR * headR * 3.0));
+                col += HEAD_COLOR.rgb * halo * 0.4 * HEAD_GLOW * glowPulse;
+                float hg = exp(-headDist * headDist / (headR * headR * 0.25));
+                col += HEAD_COLOR.rgb * hg * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
+            }
+            continue;
+        }
 
         // ── Trail glow: closest distance to curve segments
         float minDist = 1e9;
         float closestFade = 0.0;
-        for (int i = 0; i < 60; i++) {
-            float f0 = float(i) / 60.0;
-            float f1 = float(i + 1) / 60.0;
-            vec2 p0 = curvePoint(headParam - f0 * tailParamLen, aspect, vYOff);
-            vec2 p1 = curvePoint(headParam - f1 * tailParamLen, aspect, vYOff);
+        for (int i = 0; i < 30; i++) {
+            float f0 = float(i) / 30.0;
+            float f1 = float(i + 1) / 30.0;
+            vec2 p0 = curvePoint(headParam - f0 * tailParamLen, aspect, cOrigin, cca, csa);
+            vec2 p1 = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
             vec2 seg = p1 - p0;
             float proj = clamp(dot(uv - p0, seg) / dot(seg, seg), 0.0, 1.0);
             float d = length(uv - (p0 + seg * proj));
@@ -143,8 +170,8 @@ void main() {
 
         // Sparkle: rotated normal to path + spin
         vec2 hp = uv - headPos;
-        vec2 tang = curvePoint(headParam + 0.01, aspect, vYOff)
-                   - curvePoint(headParam - 0.01, aspect, vYOff);
+        vec2 tang = curvePoint(headParam + 0.01, aspect, cOrigin, cca, csa)
+                   - curvePoint(headParam - 0.01, aspect, cOrigin, cca, csa);
         float pathAngle = atan(tang.y, tang.x);
         float spinAngle = pathAngle + u_time * HEAD_SPIN * vSpin * PI * 2.0;
         float cs = cos(spinAngle), sn = sin(spinAngle);
