@@ -7,22 +7,22 @@ uniform float u_time;
 
 // @lil-gui-start
 const float ANIM_DURATION    = 7.0;    // seconds per cycle // @range(0.0, 10.0, 0.5)
-const float HEAD_DIAMETER    = 0.14;   // head size (fraction of height) // @range(0.05, 1.0, 0.01)
+const float HEAD_DIAMETER    = 0.1;   // head size (fraction of height) // @range(0.05, 1.0, 0.01)
 const float HEAD_POINTS      = 5.0;    // number of star points // @range(3.0, 15.0, 1.0)
 const float HEAD_INNER_R     = 0.47;    // inner radius ratio // @range(0.0, 1.0, 0.01)
 const float HEAD_GLOW        = 0.33;    // head glow brightness // @range(0.0, 4.0, 0.01)
 const float HEAD_SPIN        = 0.2;    // star rotation speed // @range(0.0, 3.0, 0.01)
 const float TAIL_LENGTH      = 1.65;   // tail length (fraction of height) // @range(0.0, 4.5, 0.05)
-const float TAIL_WIDTH_HEAD  = 0.17;  // tail width at the head end // @range(0.01, 1.0, 0.005)
+const float TAIL_WIDTH_HEAD  = 0.03;  // tail width at the head end // @range(0.01, 1.0, 0.005)
 const float TAIL_WIDTH_END   = 0.378;   // tail width at the tail tip // @range(0.0, 0.6, 0.001)
 const float GLOW_FREQ        = 0.11;    // glow pulsation frequency // @range(0.0, 1.0, 0.01)
 const float GLOW_AMP         = 0.36;    // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
 const float GLOW_INTENSITY   = 1.6;    // overall brightness // @range(0.3, 5.0, 0.1)
-const vec4  HEAD_COLOR       = vec4(0.2863, 0.5569, 0.9333, 1.0);  // head glow color
+const vec4  HEAD_COLOR       = vec4(0.6588, 0.8, 1.0, 1.0);  // head glow color
 const vec4  TAIL_START_COLOR = vec4(0.1294, 0.3216, 0.7098, 1.0);   // tail color near head
 const vec4  TAIL_END_COLOR   = vec4(0.0118, 0.1451, 0.549, 0.0);  // tail color at tip
 const float STAR_COUNT       = 8.0;    // number of stars // @range(1.0, 10.0, 1.0)
-const float STAR_CONCURRENCY = 6.0;    // stars visible at once // @range(1.0, 10.0, 1.0)
+const float STAR_CONCURRENCY = 8.0;    // stars visible at once // @range(1.0, 10.0, 1.0)
 const float STAR_VARIANCE    = 0.84;    // size/path randomness // @range(0.0, 1.0, 0.01)
 // @lil-gui-end
 
