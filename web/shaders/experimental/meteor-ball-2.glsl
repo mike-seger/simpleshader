@@ -28,13 +28,13 @@ const float SPIN_ANGLE1         = 83.0;  // @range(0.0, 360.0, 1.0)
 const float SPIN_ANGLE2         = 150.0; // @range(0.0, 360.0, 1.0)
 const float PULSE_FREQ          = 2.0;   // @range(0.0, 10.0, 0.1)
 // ── Ground fog ──
-const float GROUND_DEPTH        = 0.3;   // fraction of ball submerged // @range(0.0, 0.5, 0.01)
-const float FOG_HEIGHT          = 0.6;   // fog layer thickness above ground // @range(0.1, 2.0, 0.05)
+const float GROUND_DEPTH        = 0.1;   // fraction of ball submerged // @range(0.0, 0.5, 0.01)
+const float FOG_HEIGHT          = 0.2;   // fog layer thickness above ground // @range(0.1, 2.0, 0.05)
 const float FOG_DENSITY         = 1.2;   // fog opacity // @range(0.1, 10.0, 0.1)
 const float FOG_FALLOFF         = 3.0;   // vertical fog falloff rate // @range(0.5, 10.0, 0.5)
 const float FOG_SPEED           = 0.3;   // cloud animation speed // @range(0.0, 2.0, 0.01)
-const vec3  FOG_TINT            = vec3(0.55, 0.65, 0.85);
-const float FOG_GLOW            = 0.6;   // sphere glow in fog // @range(0.0, 3.0, 0.1)
+const vec3  FOG_TINT            = vec3(0.8, 0.85, 0.95);
+const float FOG_GLOW            = 1.0;   // sphere glow in fog // @range(0.0, 3.0, 0.1)
 const float FOG_WAVE_SCALE      = 2.0;   // cloud pattern scale // @range(0.5, 8.0, 0.5)
 const float FOG_WAVE_AMP        = 0.15;  // wave height amplitude // @range(0.0, 0.5, 0.01)
 // ── Meteors ──
@@ -265,7 +265,7 @@ void main() {
     vec2 muv = gl_FragCoord.xy / u_resolution.y;  // height-normalized for meteors
 
     // ── Ball: ray setup ────────────────────────────────────
-    vec3 ro = vec3(0.0, 0.0, -2.8);
+    vec3 ro = vec3(0.0, 0.5, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
     float ballR = SPHERE_SIZE;
     vec2 hit = iSphere(ro, rd, ballR);
@@ -288,7 +288,7 @@ void main() {
             float tFogMid = (groundY + FOG_HEIGHT * 0.5 - ro.y) / rd.y;
             tSample = max(tFogMid, 1.0);
         }
-        tSample = min(tSample, 20.0);
+        tSample = min(tSample, 10.0);
         vec3 pMid = ro + rd * tSample;
 
         // Height-based density at this sample point
@@ -300,14 +300,14 @@ void main() {
         float effectiveFogTop = groundY + FOG_HEIGHT + cloudVal;
 
         // Soft height fade: fog fades out above the noisy fog top
-        float heightFade = smoothstep(effectiveFogTop + 0.3, effectiveFogTop - 0.2, pMid.y);
+        float heightFade = smoothstep(effectiveFogTop + 0.1, effectiveFogTop - 0.1, pMid.y);
         density *= heightFade;
 
         // Path length approximation
         float pathLen = tSample;
         if (rd.y < -0.01) {
             float grazing = 1.0 / max(-rd.y, 0.01);
-            density *= min(grazing * 0.3, 3.0);
+            density *= min(grazing * 0.2, 2.0);
         }
 
         fogAlpha = 1.0 - exp(-density * pathLen);
@@ -338,42 +338,60 @@ void main() {
     if (hitsphere) {
         vec3 nFront = normalize(ro + rd * hit.x);
         vec4 front = shadeSphere(nFront, rd);
-
-        // Overlay fog on submerged parts of the ball
-        vec3 hitPt = ro + rd * hit.x;
-        float hitY = hitPt.y;
-        float localFogSurf = groundY + cloudSurface(hitPt.xz, fogTime);
-
-        // How deep below the wavy fog surface (0 = at surface, 1+ = fully under)
-        float depth = (localFogSurf - hitY) / max(ballR * 0.2, 0.01);
-        depth = clamp(depth, 0.0, 1.0);
-
-        // Soften ball silhouette where submerged: fade ball alpha near its rim
-        // nFront.z faces the camera; near the rim it's small → rimFade drops
-        float rimFade = smoothstep(0.0, 0.25, abs(nFront.z));
-        // Only apply rim dissolve to submerged parts
-        float ballAlpha = front.a * mix(1.0, rimFade, depth);
-
-        // Composite ball on top of background with softened alpha
-        col = mix(col, front.rgb, ballAlpha);
-
-        // Progressive fog: deeper = more opaque (exponential ramp)
-        float fogOverlay = 1.0 - exp(-depth * 4.0);
-
-        // Glow at the fog line on the ball
-        float edgeGlow = exp(-depth * depth * 10.0) * FOG_GLOW * step(0.01, depth);
-        float lr2 = smoothstep(-0.3, 0.3, hitPt.x);
-        vec3 glowTint = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr2);
-
-        // Deeper parts blend more toward fog color
-        float deepBlend = depth * depth;  // quadratic: subtle near edge, heavy deep
-        vec3 submergedCol = mix(FOG_TINT * 0.85, FOG_TINT * 0.6, deepBlend);
-
-        // Overlay fog on submerged ball with depth-dependent opacity
-        col = mix(col, submergedCol + glowTint * edgeGlow, fogOverlay);
+        col = mix(col, front.rgb, front.a);
     }
 
-    // ── Meteors (rendered in front of ball) ────────────────
+    // ── Front fog: continuous layer in front of ball, behind meteors ──
+    {
+        // Use a consistent sample point for ALL rays based on fog plane height.
+        // This ensures the fog is continuous across sphere and non-sphere pixels.
+        float fogPlaneY = groundY + FOG_HEIGHT * 0.15;
+        float tSample;
+        if (rd.y < -0.001) {
+            tSample = (fogPlaneY - ro.y) / rd.y;
+        } else {
+            tSample = 8.0;
+        }
+        tSample = clamp(tSample, 1.0, 20.0);
+        vec3 pFront = ro + rd * tSample;
+
+        float cloudVal = cloudSurface(pFront.xz, fogTime);
+        float effectiveFogTop = fogPlaneY + cloudVal;
+
+        // Soft vertical fade at fog top
+        float heightFade = smoothstep(effectiveFogTop + 0.15, effectiveFogTop - 0.15, pFront.y);
+
+        // Height-based density
+        float hAbove = max(pFront.y - groundY, 0.0);
+        float frontDensity = exp(-hAbove * FOG_FALLOFF) * FOG_DENSITY * 1.5;
+        frontDensity *= heightFade;
+
+        // Grazing angle boost for horizon
+        if (rd.y < -0.01) {
+            float grazing = 1.0 / max(-rd.y, 0.01);
+            frontDensity *= min(grazing * 0.2, 2.0);
+        }
+
+        float frontAlpha = 1.0 - exp(-frontDensity * 3.0);
+
+        // Bright, glowing cloud color
+        float cloud2 = cloudSurface(pFront.xz * 0.6, fogTime * 0.8);
+        float brightness = clamp(0.8 + cloud2 * 0.4, 0.6, 1.15);
+        vec3 frontFogCol = FOG_TINT * brightness;
+
+        // Subtle glow near sphere
+        if (hitsphere) {
+            vec3 hitPt = ro + rd * hit.x;
+            float fogLineProx = smoothstep(0.2, 0.0, abs(hitPt.y - effectiveFogTop));
+            float lr = smoothstep(-0.3, 0.3, hitPt.x);
+            vec3 glowCol = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr);
+            frontFogCol += glowCol * fogLineProx * FOG_GLOW * 0.4;
+        }
+
+        col = mix(col, frontFogCol, frontAlpha);
+    }
+
+    // ── Meteors (rendered in front of everything) ──────────
     float glowPulse = 1.0 + GLOW_AMP * sin(u_time * GLOW_FREQ * PI * 2.0);
     vec2 cOrigin = curveBase(-0.15, aspect);
 
