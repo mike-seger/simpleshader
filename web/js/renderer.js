@@ -20,7 +20,7 @@ export default class Renderer {
   /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
     this.canvas = canvas;
-    this.gl = canvas.getContext("webgl", { antialias: false, preserveDrawingBuffer: false });
+    this.gl = canvas.getContext("webgl", { antialias: false, preserveDrawingBuffer: true });
     if (!this.gl) throw new Error("WebGL not supported");
 
     this._program = null;   // single-pass program
@@ -40,6 +40,10 @@ export default class Renderer {
     this.onFps = null; // callback(fps)
 
     this._initGeometry();
+
+    // Auto-resize canvas when its CSS size changes (avoids resize inside draw)
+    this._resizeObserver = new ResizeObserver(() => this.resize());
+    this._resizeObserver.observe(this.canvas);
   }
 
   /** Create fullscreen quad buffer */
@@ -293,6 +297,8 @@ export default class Renderer {
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
+      // Immediately draw to fill the new buffer (resize clears it)
+      if (!this._paused) this._draw();
     }
     if (this._paused) this._draw();
   }
@@ -361,15 +367,11 @@ export default class Renderer {
     const gl = this.gl;
     if (!this._program && this._passes.length === 0) return;
 
-    // Resize canvas to match display size
-    const dpr = window.devicePixelRatio || 1;
-    const w = this.canvas.clientWidth * dpr | 0;
-    const h = this.canvas.clientHeight * dpr | 0;
+    // Use the current canvas buffer dimensions — resize is handled
+    // externally by resize() to avoid mid-frame buffer clears
+    const w = this.canvas.width;
+    const h = this.canvas.height;
     if (w === 0 || h === 0) return;
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
 
     if (this._passes.length > 0) {
       this._drawMultipass(w, h);

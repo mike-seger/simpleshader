@@ -57,12 +57,6 @@ const float METEOR_VARIANCE     = 0.84;  // size/path randomness // @range(0.0, 
 // @lil-gui-end
 
 // ── Shared utilities ───────────────────────────────────────
-vec4 tanh_safe(vec4 x) {
-    vec4 cx = clamp(x, -10.0, 10.0);
-    vec4 e2 = exp(2.0 * cx);
-    return (e2 - 1.0) / (e2 + 1.0);
-}
-
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
     return mat2(c, -s, s, c);
@@ -134,17 +128,17 @@ float starsPattern(vec3 n) {
     for (int i = 0; i < 12; i++) {
         vec3 cDir = getStarCenter(i);
 
-        vec3 upRef = abs(cDir.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-        vec3 tU = normalize(cross(upRef, cDir));
-        vec3 tV = normalize(cross(cDir, tU));
-
         float cosA = dot(n, cDir);
-        if (cosA > 0.1) {
+        if (cosA > 0.3) {
+            vec3 upRef = abs(cDir.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+            vec3 tU = normalize(cross(upRef, cDir));
+            vec3 tV = normalize(cross(cDir, tU));
             vec2 lp = vec2(dot(n, tU), dot(n, tV)) / cosA;
             lp *= 2.6 / STAR_SIZE;
             lp *= rot(getStarRotation(i));
             float sd = sdStar5(lp, 1.0, STAR_INNER_RATIO);
             d = min(d, sd);
+            if (d < -0.05) break;
         }
     }
 
@@ -225,7 +219,7 @@ vec2 curvePoint(float t, float aspect, vec2 origin, float ca, float sa) {
 
 float perspScale(float t) {
     float ct = clamp(t, -0.5, 2.0);
-    return (ct + 0.3) * 1.25;
+    return max((ct + 0.3) * 1.25, 0.01);
 }
 
 // ── Main ───────────────────────────────────────────────────
@@ -243,67 +237,44 @@ void main() {
     vec2 hit = iSphere(ro, rd, ballR);
     bool hitsphere = hit.x > 0.0;
 
-    // ── Ball: cloud ray march ──────────────────────────────
-    vec4 accFront = vec4(0.0);
-    vec4 accBack  = vec4(0.0);
-    float z = 0.0;
+    // ── Analytical fog / atmosphere ───────────────────────────
+    // Replaces ray march with a single evaluation — no loop
     float cloudTime = u_time * CLOUD_SPEED;
-    for (int ii = 1; ii <= 50; ii++) {
-        vec3 p = ro + z * rd;
-        float sd = length(p) - ballR;
-        if (sd < -0.01) {
-            z += -sd;
-            continue;
-        }
 
-        vec3 c = p;
-        c.z *= 3.0;
-        float f2 = 2.0; c += sin(c.yzx * f2 + z + cloudTime) * 0.5;
-        float f3 = 3.0; c += sin(c.yzx * f3 + z + cloudTime) / f3;
-        float f4 = 4.0; c += sin(c.yzx * f4 + z + cloudTime) * 0.25;
-        float f5 = 5.0; c += sin(c.yzx * f5 + z + cloudTime) * 0.2;
-        float f6 = 6.0; c += sin(c.yzx * f6 + z + cloudTime) / f6;
-        float cloud = CLOUD_FLOOR + abs(CLOUD_DENSITY * c.y + abs(p.y + CLOUD_Y_OFFSET));
+    // Fog density increases downward and toward the horizon
+    float horizon = 1.0 - abs(rd.y);
+    float fogDepth = horizon * horizon * horizon;
+    float yBand = exp(-(rd.y + CLOUD_Y_OFFSET) * (rd.y + CLOUD_Y_OFFSET) * 2.0);
 
-        z += min(cloud, max(sd, 0.01)) * 0.2;
+    // Animated wisps using ray direction as coordinate
+    vec3 fogPos = rd * 3.0;
+    float wisps = sin(fogPos.x * 2.0 + cloudTime) * 0.5
+               + sin(fogPos.z * 3.0 - cloudTime * 0.7) * 0.3
+               + sin((fogPos.x + fogPos.z) * 4.0 + cloudTime * 1.3) * 0.2;
+    wisps = wisps * 0.5 + 0.5;  // normalize to 0..1
 
-        if (sd > 0.01) {
-            vec4 contrib = vec4((CLOUD_TINT + vec3(0.0, 0.0, z * 0.3)) / max(cloud, 0.001), 0.0);
+    float fogAmount = (CLOUD_DENSITY * 3.0 + CLOUD_FLOOR) * mix(fogDepth, yBand, 0.6) * wisps;
 
-            if (sd < ballR * 0.8) {
-                float glowFalloff = exp(-sd * sd * 2.0);
-                float lr = smoothstep(-0.3, 0.3, p.x);
-                vec3 glowCol = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr);
-                contrib.rgb += glowCol * glowFalloff * CLOUD_GLOW / max(cloud, 0.01);
-            }
+    // Color the fog
+    vec3 fogCol = CLOUD_TINT / CLOUD_BRIGHTNESS * fogAmount * 800.0;
 
-            if (hitsphere && z < hit.x) {
-                accFront += contrib;
-            } else {
-                accBack += contrib;
-            }
-        }
-
-        if (accBack.r + accBack.g + accBack.b > CLOUD_BRIGHTNESS * 3.0) break;
+    // Sphere proximity glow bleeding into fog
+    if (hitsphere) {
+        float edgeDist = length(uv) - ballR * 0.55;
+        float glow = exp(-edgeDist * edgeDist * 3.0) * CLOUD_GLOW;
+        float lr = smoothstep(-0.3, 0.3, uv.x);
+        vec3 glowCol = mix(STAR_EDGE_COLOR.rgb, STAR_EDGE_COLOR2.rgb, lr);
+        fogCol += glowCol * glow * 0.3;
     }
 
     // ── Ball: composite ────────────────────────────────────
-    vec3 col = tanh_safe(accBack / CLOUD_BRIGHTNESS).rgb;
+    vec3 col = fogCol;
 
     if (hitsphere) {
-        vec3 nBack = normalize(ro + rd * hit.y);
-        vec4 back = shadeSphere(nBack, rd);
-        col = mix(col, back.rgb, back.a * 0.5);
-
         vec3 nFront = normalize(ro + rd * hit.x);
         vec4 front = shadeSphere(nFront, rd);
         col = mix(col, front.rgb, front.a);
     }
-
-    vec3 frontCol = tanh_safe(accFront / CLOUD_BRIGHTNESS).rgb;
-    float frontLum = dot(frontCol, vec3(0.2, 0.4, 0.4));
-    float frontAlpha = clamp(frontLum * 3.0, 0.0, 0.9);
-    col = mix(col, frontCol, frontAlpha);
 
     // ── Meteors (rendered in front of ball) ────────────────
     float glowPulse = 1.0 + GLOW_AMP * sin(u_time * GLOW_FREQ * PI * 2.0);
@@ -335,7 +306,7 @@ void main() {
         vec2 headPos = curvePoint(headParam, aspect, cOrigin, cca, csa);
 
         float headDist = length(muv - headPos);
-        float maxReach = max(sTailLen, TAIL_WIDTH_HEAD * vWidth) * 1.5;
+        float maxReach = max(sTailLen, TAIL_WIDTH_HEAD * vWidth) * 1.2;
         if (headDist > maxReach) {
             float headPScale = perspScale(headParam);
             float headR = sHeadDia * 0.5 * headPScale;
@@ -352,16 +323,19 @@ void main() {
         float minDist = 1e9;
         float closestFade = 0.0;
         vec2 prevPt = curvePoint(headParam, aspect, cOrigin, cca, csa);
-        for (int i = 0; i < 20; i++) {
-            float f1 = float(i + 1) / 20.0;
+        for (int i = 0; i < 8; i++) {
+            float f1 = float(i + 1) / 8.0;
             vec2 nextPt = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
             vec2 seg = nextPt - prevPt;
-            float proj = clamp(dot(muv - prevPt, seg) / dot(seg, seg), 0.0, 1.0);
-            float d = length(muv - (prevPt + seg * proj));
-            if (d < minDist) {
-                minDist = d;
-                float f0 = float(i) / 20.0;
-                closestFade = 1.0 - mix(f0, f1, proj);
+            float segLenSq = dot(seg, seg);
+            if (segLenSq > 0.0000000001) {
+                float proj = clamp(dot(muv - prevPt, seg) / segLenSq, 0.0, 1.0);
+                float d = length(muv - (prevPt + seg * proj));
+                if (d < minDist) {
+                    minDist = d;
+                    float f0 = float(i) / 8.0;
+                    closestFade = 1.0 - mix(f0, f1, proj);
+                }
             }
             prevPt = nextPt;
         }

@@ -57,7 +57,7 @@ vec2 curvePoint(float t, float aspect, vec2 origin, float ca, float sa) {
 // Z-depth follows same curve; perspective scale normalized to 1.0 at t=0.5
 float perspScale(float t) {
     float ct = clamp(t, -0.5, 2.0);
-    return (ct + 0.3) * 1.25;  // linear approx, 1.0 at t=0.5
+    return max((ct + 0.3) * 1.25, 0.01);  // linear approx, 1.0 at t=0.5
 }
 
 void main() {
@@ -126,12 +126,15 @@ void main() {
             float f1 = float(i + 1) / 20.0;
             vec2 nextPt = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
             vec2 seg = nextPt - prevPt;
-            float proj = clamp(dot(uv - prevPt, seg) / dot(seg, seg), 0.0, 1.0);
-            float d = length(uv - (prevPt + seg * proj));
-            if (d < minDist) {
-                minDist = d;
-                float f0 = float(i) / 20.0;
-                closestFade = 1.0 - mix(f0, f1, proj);
+            float segLenSq = dot(seg, seg);
+            if (segLenSq > 0.0000000001) {
+                float proj = clamp(dot(uv - prevPt, seg) / segLenSq, 0.0, 1.0);
+                float d = length(uv - (prevPt + seg * proj));
+                if (d < minDist) {
+                    minDist = d;
+                    float f0 = float(i) / 20.0;
+                    closestFade = 1.0 - mix(f0, f1, proj);
+                }
             }
             prevPt = nextPt;
         }
