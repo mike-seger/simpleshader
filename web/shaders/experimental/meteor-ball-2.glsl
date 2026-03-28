@@ -20,18 +20,22 @@ const vec4  SPHERE_COLOR        = vec4(0.1137, 0.1294, 0.6863, 0.95);
 const float SPHERE_INTENSITY    = 1.0;   // @range(0.0, 3.0, 0.1)
 const float SPHERE_GLOSS        = 500.0; // @range(1.0, 2000.0, 1.0)
 const float SPHERE_REFLECT      = 0.0;   // @range(0.0, 1.0, 0.01)
-const float SPHERE_SIZE         = 1.3;   // @range(0.5, 2.5, 0.05)
-const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0);
+const float SPHERE_SIZE         = 1.85;   // @range(0.5, 2.5, 0.05)
+const vec3  LIGHT_DIR           = vec3(1.5, -0.1, -2.0);
 const float SPIN_SPEED          = 4.5;   // @range(0.0, 20.0, 0.1)
 const float SPIN_RATIO          = 0.61;  // @range(0.0, 2.0, 0.01)
 const float SPIN_ANGLE1         = 83.0;  // @range(0.0, 360.0, 1.0)
 const float SPIN_ANGLE2         = 150.0; // @range(0.0, 360.0, 1.0)
-const float PULSE_FREQ          = 2.0;   // @range(0.0, 10.0, 0.1)
+const float PULSE_FREQ          = 2.3;   // @range(0.0, 10.0, 0.1)
+// ── Camera & sphere placement ──
+const vec3  CAM_POS             = vec3(0.0, 0.192, -4.984);
+const float CAM_FOCAL           = 1.25;   // focal length (zoom) // @range(0.5, 4.0, 0.05)
+const vec3  SPHERE_CENTER       = vec3(0.0, 0.965, 0.0);
 // ── Ground fog ──
-const float GROUND_DEPTH        = 0.1;   // fraction of ball submerged // @range(0.0, 0.5, 0.01)
-const float FOG_HEIGHT          = 0.2;   // fog layer thickness above ground // @range(0.1, 2.0, 0.05)
-const float FOG_DENSITY         = 1.2;   // fog opacity // @range(0.1, 10.0, 0.1)
-const float FOG_FALLOFF         = 3.0;   // vertical fog falloff rate // @range(0.5, 10.0, 0.5)
+const float GROUND_DEPTH        = 0.31;   // fraction of ball submerged // @range(0.0, 0.5, 0.01)
+const float FOG_HEIGHT          = 0.1;   // fog layer thickness above ground // @range(-5.0, 5.0, 0.05)
+const float FOG_DENSITY         = 4.7;   // fog opacity // @range(0.1, 10.0, 0.1)
+const float FOG_FALLOFF         = 6.5;   // vertical fog falloff rate // @range(0.5, 10.0, 0.5)
 const float FOG_SPEED           = 0.3;   // cloud animation speed // @range(0.0, 2.0, 0.01)
 const vec3  FOG_TINT            = vec3(0.8, 0.85, 0.95);
 const float FOG_GLOW            = 1.0;   // sphere glow in fog // @range(0.0, 3.0, 0.1)
@@ -57,7 +61,6 @@ const float METEOR_COUNT        = 8.0;   // number of meteors // @range(1.0, 10.
 const float METEOR_CONCURRENCY  = 8.0;   // meteors visible at once // @range(1.0, 10.0, 1.0)
 const float METEOR_VARIANCE     = 0.84;  // size/path randomness // @range(0.0, 5.0, 0.01)
 // @lil-gui-end
-
 
 // ── Shared utilities ───────────────────────────────────────
 mat2 rot(float a) {
@@ -265,15 +268,17 @@ void main() {
     vec2 muv = gl_FragCoord.xy / u_resolution.y;  // height-normalized for meteors
 
     // ── Ball: ray setup ────────────────────────────────────
-    vec3 ro = vec3(0.0, -0.5, -2.8);
-    vec3 rd = normalize(vec3(uv, 1.6));
+    vec3 ro = CAM_POS;
+    vec3 rd = normalize(vec3(uv, CAM_FOCAL));
     float ballR = SPHERE_SIZE;
-    vec2 hit = iSphere(ro, rd, ballR);
+    // Offset ray origin so sphere is centered at SPHERE_CENTER
+    vec3 roLocal = ro - SPHERE_CENTER;
+    vec2 hit = iSphere(roLocal, rd, ballR);
     bool hitsphere = hit.x > 0.0;
 
     // ── Ground fog plane ───────────────────────────────────
     // Ground level: ball submerged by GROUND_DEPTH fraction of diameter
-    float groundY = -ballR + GROUND_DEPTH * 2.0 * ballR;
+    float groundY = SPHERE_CENTER.y - ballR + GROUND_DEPTH * 2.0 * ballR;
     float fogTime = u_time * FOG_SPEED;
 
     // Compute fog contribution
@@ -319,7 +324,7 @@ void main() {
         fogCol = FOG_TINT * brightness;
 
         // Sphere proximity glow bleeding into fog
-        float distToSphere = length(pMid) - ballR;
+        float distToSphere = length(pMid - SPHERE_CENTER) - ballR;
         if (distToSphere < ballR) {
             float glowFalloff = exp(-distToSphere * distToSphere * 2.0);
             float lr = smoothstep(-0.3, 0.3, pMid.x);
@@ -331,12 +336,24 @@ void main() {
     // ── Compose background ─────────────────────────────────
     vec3 col = vec3(0.0);
 
+    // Background clouds behind the sphere (distant atmospheric haze)
+    {
+        float skyCloud = cloudSurface(rd.xz * 4.0, fogTime * 0.4);
+        float skyCloud2 = cloudSurface(rd.xz * 2.0 + 3.0, fogTime * 0.25);
+        float pattern = skyCloud * 0.6 + skyCloud2 * 0.4;
+        // Visible around and behind the sphere, fade out at top/bottom edges
+        float vertFade = smoothstep(-0.8, -0.2, rd.y) * smoothstep(0.8, 0.2, rd.y);
+        float skyAlpha = clamp(pattern * 1.5 + 0.2, 0.0, 1.0) * vertFade * 0.12;
+        vec3 skyCol = FOG_TINT * (0.4 + pattern * 0.3);
+        col = mix(col, skyCol, skyAlpha);
+    }
+
     // Height fog (soft horizon, no hard ground plane)
     col = mix(col, fogCol, fogAlpha);
 
     // ── Ball: composite ────────────────────────────────────
     if (hitsphere) {
-        vec3 nFront = normalize(ro + rd * hit.x);
+        vec3 nFront = normalize(roLocal + rd * hit.x);
         vec4 front = shadeSphere(nFront, rd);
         col = mix(col, front.rgb, front.a);
     }
