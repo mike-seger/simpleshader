@@ -14,7 +14,7 @@ const vec4  STAR_COLOR          = vec4(0.8706, 0.8745, 0.9098, 0.95);
 const float STAR_INTENSITY      = 1.5;   // @range(0.0, 5.0, 0.1)
 const float STAR_EDGE_WIDTH     = 0.1;   // @range(0.01, 2.0, 0.01)
 const vec4  STAR_EDGE_COLOR     = vec4(0.8392, 0.9216, 1.0, 1.0);
-const vec4  STAR_EDGE_COLOR2    = vec4(0.55, 0.1, 0.8755, 1.0);
+const vec4  STAR_EDGE_COLOR2    = vec4(0.2431, 0.6118, 0.8, 1.0);
 const float STAR_EDGE_INTENSITY = 2.0;   // @range(0.0, 5.0, 0.1)
 const vec4  SPHERE_COLOR        = vec4(0.1137, 0.1294, 0.6863, 0.95);
 const float SPHERE_INTENSITY    = 1.0;   // @range(0.0, 3.0, 0.1)
@@ -22,39 +22,40 @@ const float SPHERE_GLOSS        = 500.0; // @range(1.0, 2000.0, 1.0)
 const float SPHERE_REFLECT      = 0.0;   // @range(0.0, 1.0, 0.01)
 const float SPHERE_SIZE         = 1.3;   // @range(0.5, 2.5, 0.05)
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0);
-const vec4  LIGHT_DIFFUSE       = vec4(0.99, 1.0, 1.0, 0.5);
+const vec4  LIGHT_DIFFUSE       = vec4(0.99, 0.95, 1.0, 0.5);
 const float SPIN_SPEED          = 4.5;   // @range(0.0, 20.0, 0.1)
 const float SPIN_RATIO          = 0.61;  // @range(0.0, 2.0, 0.01)
-const float SPIN_ANGLE1         = 92.0;  // @range(0.0, 360.0, 1.0)
+const float SPIN_ANGLE1         = 83.0;  // @range(0.0, 360.0, 1.0)
 const float SPIN_ANGLE2         = 150.0; // @range(0.0, 360.0, 1.0)
 const float PULSE_FREQ          = 2.0;   // @range(0.0, 10.0, 0.1)
 const float CLOUD_SPEED         = 0.3;   // @range(0.0, 2.0, 0.01)
 const float CLOUD_DENSITY       = 0.2;   // @range(0.0, 1.0, 0.01)
 const float CLOUD_FLOOR         = 0.1;   // @range(0.0, 1.0, 0.01)
 const float CLOUD_Y_OFFSET      = 0.8;   // @range(-2.0, 2.0, 0.1)
-const float CLOUD_BRIGHTNESS    = 2000.0; // @range(100.0, 10000.0, 100.0)
-const vec3  CLOUD_TINT          = vec3(1.5, 2.0, 4.0);
+const float CLOUD_BRIGHTNESS    = 2400.0; // @range(100.0, 10000.0, 100.0)
+const vec3  CLOUD_TINT          = vec3(1.7725, 0.7216, 2.6353);
 const float CLOUD_GLOW          = 0.4;   // @range(0.0, 2.0, 0.01)
 // ── Meteors ──
 const float ANIM_DURATION       = 7.0;   // seconds per cycle // @range(0.0, 10.0, 0.5)
 const float HEAD_DIAMETER       = 0.1;   // head size // @range(0.05, 1.0, 0.01)
+const vec4  HEAD_COLOR          = vec4(1.0, 1.0, 1.0, 1.0);
 const float HEAD_POINTS         = 5.0;   // star points // @range(3.0, 15.0, 1.0)
 const float HEAD_INNER_R        = 0.47;  // inner radius ratio // @range(0.0, 1.0, 0.01)
 const float HEAD_GLOW           = 0.33;  // head glow brightness // @range(0.0, 4.0, 0.01)
 const float HEAD_SPIN           = 0.2;   // star rotation speed // @range(0.0, 3.0, 0.01)
 const float TAIL_LENGTH         = 1.65;  // tail length // @range(0.0, 4.5, 0.05)
+const vec4  TAIL_START_COLOR    = vec4(0.1294, 0.3216, 0.7098, 1.0);
+const vec4  TAIL_END_COLOR      = vec4(0.0118, 0.1451, 0.549, 0.0);
 const float TAIL_WIDTH_HEAD     = 0.03;  // tail width at head // @range(0.01, 1.0, 0.005)
 const float TAIL_WIDTH_END      = 0.378; // tail width at tip // @range(0.0, 0.6, 0.001)
 const float GLOW_FREQ           = 0.11;  // glow pulsation frequency // @range(0.0, 1.0, 0.01)
 const float GLOW_AMP            = 0.36;  // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
 const float GLOW_INTENSITY      = 1.6;   // meteor brightness // @range(0.3, 5.0, 0.1)
-const vec4  HEAD_COLOR          = vec4(0.6588, 0.8, 1.0, 1.0);
-const vec4  TAIL_START_COLOR    = vec4(0.1294, 0.3216, 0.7098, 1.0);
-const vec4  TAIL_END_COLOR      = vec4(0.0118, 0.1451, 0.549, 0.0);
 const float METEOR_COUNT        = 8.0;   // number of meteors // @range(1.0, 10.0, 1.0)
 const float METEOR_CONCURRENCY  = 8.0;   // meteors visible at once // @range(1.0, 10.0, 1.0)
 const float METEOR_VARIANCE     = 0.84;  // size/path randomness // @range(0.0, 1.0, 0.01)
 // @lil-gui-end
+
 
 // ── Shared utilities ───────────────────────────────────────
 mat2 rot(float a) {

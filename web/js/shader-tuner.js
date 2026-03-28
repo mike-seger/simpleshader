@@ -102,7 +102,7 @@ function getRange(name, value, comment) {
 }
 
 function isColor(name) {
-  return /_COLOR$/i.test(name);
+  return /_COLOR\d*$/i.test(name) || /_TINT\d*$/i.test(name);
 }
 
 function isDirection(name) {
@@ -308,16 +308,42 @@ export default class ShaderTuner {
       return;
     }
 
-    // vec4 color: inline color picker + opacity slider (no sub-folder)
-    if (p.type === "vec4" && isColor(p.name)) {
+    // vec3 color: inline color picker (with brightness slider for HDR)
+    if (p.type === "vec3" && isColor(p.name)) {
       const colorKey = p.name + "__rgb";
-      const alphaKey = p.name + "__a";
-      this._proxyObj[colorKey] = { r: p.value[0], g: p.value[1], b: p.value[2] };
-      this._proxyObj[alphaKey] = p.value[3];
+      const scaleKey = p.name + "__scale";
+      const maxC = Math.max(p.value[0], p.value[1], p.value[2], 1.0);
+      this._proxyObj[colorKey] = { r: p.value[0] / maxC, g: p.value[1] / maxC, b: p.value[2] / maxC };
+      this._proxyObj[scaleKey] = maxC;
       const cc = parent.addColor(this._proxyObj, colorKey).name(label)
         .onChange(() => this._applyColor(p));
       if (tip) cc.domElement.setAttribute("title", tip);
-      const alphaLabel = label.replace(/Color$/, "Alpha").trim() || "Alpha";
+      if (maxC > 1.0) {
+        parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
+          .name(label.replace(/Tint\d*$|Color\d*$/, "").trim() + " Bright")
+          .onChange(() => this._applyColor(p));
+      }
+      return;
+    }
+
+    // vec4 color: inline color picker + opacity slider (with brightness for HDR)
+    if (p.type === "vec4" && isColor(p.name)) {
+      const colorKey = p.name + "__rgb";
+      const alphaKey = p.name + "__a";
+      const scaleKey = p.name + "__scale";
+      const maxC = Math.max(p.value[0], p.value[1], p.value[2], 1.0);
+      this._proxyObj[colorKey] = { r: p.value[0] / maxC, g: p.value[1] / maxC, b: p.value[2] / maxC };
+      this._proxyObj[alphaKey] = p.value[3];
+      this._proxyObj[scaleKey] = maxC;
+      const cc = parent.addColor(this._proxyObj, colorKey).name(label)
+        .onChange(() => this._applyColor(p));
+      if (tip) cc.domElement.setAttribute("title", tip);
+      if (maxC > 1.0) {
+        parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
+          .name(label.replace(/Color\d*$/, "").trim() + " Bright")
+          .onChange(() => this._applyColor(p));
+      }
+      const alphaLabel = label.replace(/Color\d*$/, "Alpha").trim() || "Alpha";
       parent.add(this._proxyObj, alphaKey, 0, 1, 0.01).name(alphaLabel)
         .onChange(() => this._applyColor(p));
       return;
@@ -350,8 +376,10 @@ export default class ShaderTuner {
 
   _applyColor(p) {
     const rgb = this._proxyObj[p.name + "__rgb"];
-    const a = this._proxyObj[p.name + "__a"];
-    const newValue = [rgb.r, rgb.g, rgb.b, a];
+    const scale = this._proxyObj[p.name + "__scale"] || 1.0;
+    const newValue = p.type === "vec3"
+      ? [rgb.r * scale, rgb.g * scale, rgb.b * scale]
+      : [rgb.r * scale, rgb.g * scale, rgb.b * scale, this._proxyObj[p.name + "__a"]];
     p.value = newValue;
     const source = rewriteConstant(this._getSource(), p, newValue);
     this._setSourceAndApply(source);
