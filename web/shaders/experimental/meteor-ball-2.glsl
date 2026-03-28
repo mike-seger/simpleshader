@@ -339,9 +339,6 @@ void main() {
         vec3 nFront = normalize(ro + rd * hit.x);
         vec4 front = shadeSphere(nFront, rd);
 
-        // Composite ball fully on top of background
-        col = mix(col, front.rgb, front.a);
-
         // Overlay fog on submerged parts of the ball
         vec3 hitPt = ro + rd * hit.x;
         float hitY = hitPt.y;
@@ -350,6 +347,15 @@ void main() {
         // How deep below the wavy fog surface (0 = at surface, 1+ = fully under)
         float depth = (localFogSurf - hitY) / max(ballR * 0.2, 0.01);
         depth = clamp(depth, 0.0, 1.0);
+
+        // Soften ball silhouette where submerged: fade ball alpha near its rim
+        // nFront.z faces the camera; near the rim it's small → rimFade drops
+        float rimFade = smoothstep(0.0, 0.25, abs(nFront.z));
+        // Only apply rim dissolve to submerged parts
+        float ballAlpha = front.a * mix(1.0, rimFade, depth);
+
+        // Composite ball on top of background with softened alpha
+        col = mix(col, front.rgb, ballAlpha);
 
         // Progressive fog: deeper = more opaque (exponential ramp)
         float fogOverlay = 1.0 - exp(-depth * 4.0);
