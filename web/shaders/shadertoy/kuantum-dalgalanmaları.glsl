@@ -1,0 +1,36 @@
+// https://www.shadertoy.com/view/7fj3DK
+
+precision highp float;
+
+uniform vec2  u_resolution;
+uniform float u_time;
+
+float tanh1(float x) {
+    float e2x = exp(2.0 * x);
+    return (e2x - 1.0) / (e2x + 1.0);
+}
+
+vec4 tanh4(vec4 x) {
+    vec4 e2x = exp(2.0 * x);
+    return (e2x - 1.0) / (e2x + 1.0);
+}
+
+void main() {
+    float s, d;
+    float T = u_time * 0.5;
+
+    vec2 uv = (gl_FragCoord.xy - u_resolution * 0.5) / u_resolution.y
+              + vec2(sin(T * 0.2) * 0.3, sin(T * 0.5) * 0.1);
+    gl_FragColor = vec4(0.0);
+
+    for (int i = 0; i < 128; i++) {
+        vec3 p = vec3(uv * d, d + T * 1e2);
+        p.z += cos(p.z * 0.7) + sin(p.z * 0.7) + tanh1(T);
+        p.x += 1e2 - cos(T) * 1e1 + sin(T) * 1e1;
+        p += cos(p.yzx / 16.0) * 16.0 + sin(p.yzx / 32.0) * 8.0;
+        s = 0.005 + 0.8 * abs(32.0 * dot(sin(p / 132.0), cos(p.yzx / 94.0) + sin(p.yzx / 43.0)));
+        d += s;
+        gl_FragColor += (1.0 + cos(0.03 * p.y + vec4(3.0, 1.0, 0.0, 0.0))) / s + sin(T);
+    }
+    gl_FragColor = tanh4(gl_FragColor / 3e3);
+}

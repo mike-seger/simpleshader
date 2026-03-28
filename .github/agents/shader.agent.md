@@ -32,6 +32,8 @@ Replace these identifiers:
 - `mainImage(out vec4 fragColor, in vec2 fragCoord)` → `void main()`
 - Remove `#version` directives
 
+**Always force `gl_FragColor.a = 1.0;` as the last line.** Shadertoy ignores alpha, but WebGL canvases composite against a transparent background. If the shader leaves alpha below 1.0 (e.g. via `sin(vec4(r, g, b, 0.0) + ...)` or any math that doesn't write the w-component), those pixels render black in the browser even though they look correct on Shadertoy.
+
 ## File Placement
 
 - Original shaders → `web/shaders/experimental/`

@@ -32,6 +32,7 @@ const SHADER_INDEX = [
       { name: "Floating Ribbons", path: "web/shaders/shadertoy/floating-ribbons.glsl" },
       { name: "Flowing Ribbons", path: "web/shaders/shadertoy/flowing-ribbons.glsl" },
       { name: "Irridescent Ribbons", path: "web/shaders/shadertoy/irridescent-ribbons.glsl" },
+      { name: "Kuantum Dalgalanmaları", path: "web/shaders/shadertoy/kuantum-dalgalanmaları.glsl" },
       { name: "Pattern 007 Ripples", path: "web/shaders/shadertoy/pattern-007-ripples.glsl" },
       { name: "Ribbon Waves", path: "web/shaders/shadertoy/ribbon-waves.glsl" },
       { name: "Total Noob (loading Ring)", path: "web/shaders/shadertoy/total noob (loading ring).glsl" },
