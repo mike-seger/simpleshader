@@ -265,7 +265,7 @@ void main() {
     vec2 muv = gl_FragCoord.xy / u_resolution.y;  // height-normalized for meteors
 
     // ── Ball: ray setup ────────────────────────────────────
-    vec3 ro = vec3(0.0, 0.5, -2.8);
+    vec3 ro = vec3(0.0, -0.5, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
     float ballR = SPHERE_SIZE;
     vec2 hit = iSphere(ro, rd, ballR);
