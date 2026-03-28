@@ -305,79 +305,70 @@ void main() {
         float headParam = entryParam + cycle * totalRange;
         vec2 headPos = curvePoint(headParam, aspect, cOrigin, cca, csa);
 
-        float headDist = length(muv - headPos);
-        float maxReach = max(sTailLen, TAIL_WIDTH_HEAD * vWidth) * 1.2;
-        if (headDist > maxReach) {
-            float headPScale = perspScale(headParam);
-            float headR = sHeadDia * 0.5 * headPScale;
-            if (headDist < headR * 6.0) {
-                float halo = exp(-headDist * headDist / (headR * headR * 3.0));
-                col += HEAD_COLOR.rgb * halo * 0.4 * HEAD_GLOW * glowPulse;
-                float hg = exp(-headDist * headDist / (headR * headR * 0.25));
-                col += HEAD_COLOR.rgb * hg * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
-            }
-            continue;
-        }
+        // Clamp tail to avoid curve asymptote (inversesqrt blows up near t=-0.3)
+        float effTailParamLen = min(tailParamLen, max(headParam + 0.1, 0.0));
 
-        // Trail: closest distance to curve segments
-        float minDist = 1e9;
-        float closestFade = 0.0;
-        vec2 prevPt = curvePoint(headParam, aspect, cOrigin, cca, csa);
-        for (int i = 0; i < 8; i++) {
-            float f1 = float(i + 1) / 8.0;
-            vec2 nextPt = curvePoint(headParam - f1 * tailParamLen, aspect, cOrigin, cca, csa);
-            vec2 seg = nextPt - prevPt;
-            float segLenSq = dot(seg, seg);
-            if (segLenSq > 0.0000000001) {
-                float proj = clamp(dot(muv - prevPt, seg) / segLenSq, 0.0, 1.0);
-                float d = length(muv - (prevPt + seg * proj));
-                if (d < minDist) {
-                    minDist = d;
-                    float f0 = float(i) / 8.0;
-                    closestFade = 1.0 - mix(f0, f1, proj);
-                }
-            }
-            prevPt = nextPt;
-        }
-
-        float closestT = headParam - (1.0 - closestFade) * tailParamLen;
-        float pScale = perspScale(closestT);
-
-        float sWidthHead = TAIL_WIDTH_HEAD * vWidth;
-        float sWidthEnd  = TAIL_WIDTH_END * vWidth;
-        float trailW = mix(sWidthEnd, sWidthHead, closestFade) * pScale;
-        float gd = minDist / max(trailW, 0.001);
-        float trailGlow = exp(-gd * gd * 3.0) * closestFade;
-        vec3 trailTint = mix(TAIL_END_COLOR.rgb, TAIL_START_COLOR.rgb, closestFade);
-        float trailAlpha = mix(TAIL_END_COLOR.a, TAIL_START_COLOR.a, closestFade);
-        col += trailTint * trailGlow * GLOW_INTENSITY * glowPulse * 0.5 * trailAlpha;
-
-        float coreW = trailW * 0.3;
-        float coreGd = minDist / max(coreW, 0.001);
-        float coreGlow = exp(-coreGd * coreGd * 2.0) * closestFade;
-        col += vec3(1.0) * coreGlow * GLOW_INTENSITY * glowPulse * 0.3 * trailAlpha;
-
-        // Head
         float headPScale = perspScale(headParam);
         float headR = sHeadDia * 0.5 * headPScale;
-        float headD = length(muv - headPos);
 
-        float halo = exp(-headD * headD / (headR * headR * 3.0));
-        col += HEAD_COLOR.rgb * halo * 0.4 * HEAD_GLOW * glowPulse;
+        // Head glow (cheap, always rendered)
+        float headDist = length(muv - headPos);
+        if (headDist < headR * 6.0) {
+            float halo = exp(-headDist * headDist / (headR * headR * 3.0));
+            col += HEAD_COLOR.rgb * halo * 0.4 * HEAD_GLOW * glowPulse;
+            float hg = exp(-headDist * headDist / (headR * headR * 0.25));
+            col += HEAD_COLOR.rgb * hg * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
+        }
 
-        float headGlow = exp(-headD * headD / (headR * headR * 0.25));
-        col += HEAD_COLOR.rgb * headGlow * HEAD_GLOW * GLOW_INTENSITY * glowPulse;
+        // Trail (skip if no effective tail, or pixel outside bounding box)
+        if (effTailParamLen >= 0.01) {
+            vec2 tailEnd = curvePoint(headParam - effTailParamLen, aspect, cOrigin, cca, csa);
+            float pad = max(TAIL_WIDTH_END, TAIL_WIDTH_HEAD) * vWidth * 2.0 + 0.15;
+            vec2 bMin = min(headPos, tailEnd) - vec2(pad);
+            vec2 bMax = max(headPos, tailEnd) + vec2(pad);
 
-        // Sparkle star aligned to path
-        vec2 hp = muv - headPos;
-        vec2 tang = curveBase(headParam + 0.02, aspect) - curveBase(headParam - 0.02, aspect);
-        vec2 rtang = vec2(tang.x * cca - tang.y * csa, tang.x * csa + tang.y * cca);
-        float pathAngle = atan(rtang.y, rtang.x);
-        float spinAngle = pathAngle + u_time * HEAD_SPIN * vSpin * PI * 2.0;
-        float cs = cos(spinAngle), sn = sin(spinAngle);
-        vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
-        float headSpark = sparkleStar(rhp, headR * 0.6, HEAD_POINTS, HEAD_INNER_R);
-        col += vec3(1.0) * headSpark * 0.12 * GLOW_INTENSITY;
+            if (muv.x >= bMin.x && muv.x <= bMax.x && muv.y >= bMin.y && muv.y <= bMax.y) {
+                float minDist = 1e9;
+                float closestFade = 0.0;
+                vec2 prevPt = headPos;
+                for (int i = 0; i < 4; i++) {
+                    float f1 = float(i + 1) / 4.0;
+                    vec2 nextPt = curvePoint(headParam - f1 * effTailParamLen, aspect, cOrigin, cca, csa);
+                    vec2 seg = nextPt - prevPt;
+                    float segLenSq = dot(seg, seg);
+                    if (segLenSq > 0.0000000001) {
+                        float proj = clamp(dot(muv - prevPt, seg) / segLenSq, 0.0, 1.0);
+                        float d = length(muv - (prevPt + seg * proj));
+                        if (d < minDist) {
+                            minDist = d;
+                            float f0 = float(i) / 4.0;
+                            closestFade = 1.0 - mix(f0, f1, proj);
+                        }
+                    }
+                    prevPt = nextPt;
+                }
+
+                float closestT = headParam - (1.0 - closestFade) * effTailParamLen;
+                float pScale = perspScale(closestT);
+
+                float sWidthHead = TAIL_WIDTH_HEAD * vWidth;
+                float sWidthEnd  = TAIL_WIDTH_END * vWidth;
+                float trailW = mix(sWidthEnd, sWidthHead, closestFade) * pScale;
+                float gd = minDist / max(trailW, 0.001);
+                float trailGlow = exp(-gd * gd * 3.0) * closestFade;
+                vec3 trailTint = mix(TAIL_END_COLOR.rgb, TAIL_START_COLOR.rgb, closestFade);
+                float trailAlpha = mix(TAIL_END_COLOR.a, TAIL_START_COLOR.a, closestFade);
+                col += trailTint * trailGlow * GLOW_INTENSITY * glowPulse * 0.5 * trailAlpha;
+
+                // Sparkle star
+                vec2 hp = muv - headPos;
+                float spinAngle = u_time * HEAD_SPIN * vSpin * PI * 2.0;
+                float cs = cos(spinAngle), sn = sin(spinAngle);
+                vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
+                float headSpark = sparkleStar(rhp, headR * 0.6, HEAD_POINTS, HEAD_INNER_R);
+                col += vec3(1.0) * headSpark * 0.12 * GLOW_INTENSITY;
+            }
+        }
     }
 
     // ── Tone mapping ──────────────────────────────────────

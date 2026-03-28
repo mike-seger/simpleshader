@@ -379,14 +379,16 @@ export default class Renderer {
       this._drawSingle(w, h);
     }
 
-    // FPS counter
-    this._frames++;
-    const now = performance.now();
-    if (now - this._lastFpsTime >= 1000) {
-      this.fps = this._frames;
-      this._frames = 0;
-      this._lastFpsTime = now;
-      if (this.onFps) this.onFps(this.fps);
+    // FPS counter (skip when paused to avoid erratic readings)
+    if (!this._paused) {
+      this._frames++;
+      const now = performance.now();
+      if (now - this._lastFpsTime >= 1000) {
+        this.fps = this._frames;
+        this._frames = 0;
+        this._lastFpsTime = now;
+        if (this.onFps) this.onFps(this.fps);
+      }
     }
   }
 
