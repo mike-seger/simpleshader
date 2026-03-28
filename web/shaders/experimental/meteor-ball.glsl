@@ -1,7 +1,12 @@
 precision highp float;
 
+// ── Playground ↔ Shadertoy compatibility ───────────────────
+// For Shadertoy: delete from here...
 uniform vec2 u_resolution;
 uniform float u_time;
+#define iResolution vec3(u_resolution, 1.0)
+#define iTime u_time
+// ...to here.  Then delete the void main() wrapper at the bottom.
 
 #define PI  3.14159265
 
@@ -119,7 +124,7 @@ float getStarRotation(int idx) {
 }
 
 float starsPattern(vec3 n) {
-    float t = u_time * SPIN_SPEED * (PI / 180.0);
+    float t = iTime * SPIN_SPEED * (PI / 180.0);
     n.xz *= rot(t + SPIN_ANGLE1 * (PI / 180.0));
     n.xy *= rot(t * SPIN_RATIO + SPIN_ANGLE2 * (PI / 180.0));
 
@@ -182,7 +187,7 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     surfCol += edgeRGB * fresnel * 0.5;
     surfCol += edgeRGB * silhouette * edgeI * 0.3;
 
-    surfCol *= 1.0 + 0.05 * sin(u_time * PULSE_FREQ);
+    surfCol *= 1.0 + 0.05 * sin(iTime * PULSE_FREQ);
 
     float surfAlpha = mix(SPHERE_COLOR.a, STAR_COLOR.a, insideStar);
     return vec4(surfCol, surfAlpha);
@@ -222,12 +227,12 @@ float perspScale(float t) {
 }
 
 // ── Main ───────────────────────────────────────────────────
-void main() {
-    float s = min(u_resolution.x, u_resolution.y);
-    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / s;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    float s = min(iResolution.x, iResolution.y);
+    vec2 uv = (2.0 * fragCoord - iResolution.xy) / s;
 
-    float aspect = u_resolution.x / u_resolution.y;
-    vec2 muv = gl_FragCoord.xy / u_resolution.y;  // height-normalized for meteors
+    float aspect = iResolution.x / iResolution.y;
+    vec2 muv = fragCoord / iResolution.y;  // height-normalized for meteors
 
     // ── Ball: ray setup ────────────────────────────────────
     vec3 ro = vec3(0.0, 0.0, -2.8);
@@ -238,7 +243,7 @@ void main() {
 
     // ── Analytical fog / atmosphere ───────────────────────────
     // Replaces ray march with a single evaluation — no loop
-    float cloudTime = u_time * CLOUD_SPEED;
+    float cloudTime = iTime * CLOUD_SPEED;
 
     // Fog density increases downward and toward the horizon
     float horizon = 1.0 - abs(rd.y);
@@ -276,7 +281,7 @@ void main() {
     }
 
     // ── Meteors (rendered in front of ball) ────────────────
-    float glowPulse = 1.0 + GLOW_AMP * sin(u_time * GLOW_FREQ * PI * 2.0);
+    float glowPulse = 1.0 + GLOW_AMP * sin(iTime * GLOW_FREQ * PI * 2.0);
     vec2 cOrigin = curveBase(-0.15, aspect);
 
     for (int si = 0; si < 10; si++) {
@@ -297,7 +302,7 @@ void main() {
         float entryParam = -0.15;
         float totalRange = exitParam - entryParam;
         float stagger = fi / max(METEOR_CONCURRENCY, 1.0);
-        float rawCycle = u_time / ANIM_DURATION + stagger + vTime;
+        float rawCycle = iTime / ANIM_DURATION + stagger + vTime;
         float cycle = mod(rawCycle, 1.0);
         float iter = floor(rawCycle);
         float vAngle  = (hash1(fi * 9.23 + iter * 17.31) - 0.5) * METEOR_VARIANCE * 0.5;
@@ -362,7 +367,7 @@ void main() {
 
                 // Sparkle star
                 vec2 hp = muv - headPos;
-                float spinAngle = u_time * HEAD_SPIN * vSpin * PI * 2.0;
+                float spinAngle = iTime * HEAD_SPIN * vSpin * PI * 2.0;
                 float cs = cos(spinAngle), sn = sin(spinAngle);
                 vec2 rhp = vec2(hp.x * cs + hp.y * sn, -hp.x * sn + hp.y * cs);
                 float headSpark = sparkleStar(rhp, headR * 0.6, HEAD_POINTS, HEAD_INNER_R);
@@ -374,5 +379,10 @@ void main() {
     // ── Tone mapping ──────────────────────────────────────
     col = col / (1.0 + col * 0.5);
 
-    gl_FragColor = vec4(col, 1.0);
+    fragColor = vec4(col, 1.0);
+}
+
+// ── Playground wrapper (delete for Shadertoy) ──────────────
+void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
 }
