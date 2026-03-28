@@ -22,7 +22,6 @@ const float SPHERE_GLOSS        = 500.0; // @range(1.0, 2000.0, 1.0)
 const float SPHERE_REFLECT      = 0.0;   // @range(0.0, 1.0, 0.01)
 const float SPHERE_SIZE         = 1.3;   // @range(0.5, 2.5, 0.05)
 const vec3  LIGHT_DIR           = vec3(1.5, 2.0, -2.0);
-const vec4  LIGHT_DIFFUSE       = vec4(0.99, 0.95, 1.0, 0.5);
 const float SPIN_SPEED          = 4.5;   // @range(0.0, 20.0, 0.1)
 const float SPIN_RATIO          = 0.61;  // @range(0.0, 2.0, 0.01)
 const float SPIN_ANGLE1         = 83.0;  // @range(0.0, 360.0, 1.0)
@@ -48,12 +47,12 @@ const vec4  TAIL_START_COLOR    = vec4(0.1294, 0.3216, 0.7098, 1.0);
 const vec4  TAIL_END_COLOR      = vec4(0.0118, 0.1451, 0.549, 0.0);
 const float TAIL_WIDTH_HEAD     = 0.03;  // tail width at head // @range(0.01, 1.0, 0.005)
 const float TAIL_WIDTH_END      = 0.378; // tail width at tip // @range(0.0, 0.6, 0.001)
-const float GLOW_FREQ           = 0.11;  // glow pulsation frequency // @range(0.0, 1.0, 0.01)
+const float GLOW_FREQ           = 0.11;  // glow pulsation frequency // @range(0.0, 60.0, 0.01)
 const float GLOW_AMP            = 0.36;  // glow pulsation amplitude // @range(0.0, 1.0, 0.01)
 const float GLOW_INTENSITY      = 1.6;   // meteor brightness // @range(0.3, 5.0, 0.1)
 const float METEOR_COUNT        = 8.0;   // number of meteors // @range(1.0, 10.0, 1.0)
 const float METEOR_CONCURRENCY  = 8.0;   // meteors visible at once // @range(1.0, 10.0, 1.0)
-const float METEOR_VARIANCE     = 0.84;  // size/path randomness // @range(0.0, 1.0, 0.01)
+const float METEOR_VARIANCE     = 0.84;  // size/path randomness // @range(0.0, 5.0, 0.01)
 // @lil-gui-end
 
 
@@ -163,7 +162,6 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
 
     vec3 L = lightDir;
     float diff = max(dot(n, L), 0.0);
-    vec3 diffLight = LIGHT_DIFFUSE.rgb * LIGHT_DIFFUSE.a * diff;
     vec3 H = normalize(L - rd);
     float spec = pow(max(dot(n, H), 0.0), SPHERE_GLOSS) * SPHERE_REFLECT;
     float rimFactor = 1.0 - max(dot(n, -rd), 0.0);
@@ -171,7 +169,7 @@ vec4 shadeSphere(vec3 n, vec3 rd) {
     float silhouette = fresnel * fresnel;
 
     vec3 baseCol = SPHERE_COLOR.rgb * SPHERE_INTENSITY;
-    baseCol *= (0.15 + diffLight);
+    baseCol *= (0.15 + diff * 0.5);
 
     vec3 starCol = STAR_COLOR.rgb * STAR_INTENSITY * (0.3 + diff * 0.7);
     starCol += STAR_COLOR.rgb * spec * STAR_INTENSITY * 0.4;
@@ -289,10 +287,7 @@ void main() {
         float vTail   = 1.0 + (hash1(fi * 11.37) - 0.5) * METEOR_VARIANCE;
         float vWidth  = 1.0 + (hash1(fi * 3.77) - 0.5) * METEOR_VARIANCE;
         float vTime   = hash1(fi * 5.91) * METEOR_VARIANCE;
-        float vAngle  = (hash1(fi * 9.23) - 0.5) * METEOR_VARIANCE * 0.5;
         float vSpin   = 1.0 + (hash1(fi * 13.7) - 0.5) * METEOR_VARIANCE;
-
-        float cca = cos(vAngle), csa = sin(vAngle);
 
         float sTailLen = TAIL_LENGTH * vTail;
         float sHeadDia = HEAD_DIAMETER * vSize;
@@ -302,7 +297,11 @@ void main() {
         float entryParam = -0.15;
         float totalRange = exitParam - entryParam;
         float stagger = fi / max(METEOR_CONCURRENCY, 1.0);
-        float cycle = mod(u_time / ANIM_DURATION + stagger + vTime, 1.0);
+        float rawCycle = u_time / ANIM_DURATION + stagger + vTime;
+        float cycle = mod(rawCycle, 1.0);
+        float iter = floor(rawCycle);
+        float vAngle  = (hash1(fi * 9.23 + iter * 17.31) - 0.5) * METEOR_VARIANCE * 0.5;
+        float cca = cos(vAngle), csa = sin(vAngle);
         float headParam = entryParam + cycle * totalRange;
         vec2 headPos = curvePoint(headParam, aspect, cOrigin, cca, csa);
 
