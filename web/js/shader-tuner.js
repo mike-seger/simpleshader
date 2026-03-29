@@ -195,9 +195,7 @@ export default class ShaderTuner {
     this._parsed = parseConstants(source);
 
     if (this._parsed.length === 0) {
-      this._container.innerHTML =
-        '<div style="padding:16px;color:#888;font-size:12px;">No <code>@lil-gui</code> block found in current shader.</div>';
-      return;
+      return false;
     }
 
     const GUI = await loadLilGui();
@@ -272,6 +270,8 @@ export default class ShaderTuner {
         }
       }
     }
+
+    return true;
   }
 
   /** Add one control to `parent` (a GUI or folder).

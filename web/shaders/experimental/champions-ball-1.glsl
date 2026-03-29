@@ -7,9 +7,12 @@ uniform float u_time;
 #define TAU 6.28318530
 
 // ── Tweakable constants ────────────────────────────────────
+// @lil-gui-start
+const float BALL_RADUS  = 1.4;  // @range(0.1, 2.0, 0.05)
 const float STAR_SIZE   = 1.6;  // 1.0 = default, larger = bigger stars
 const float EDGE_WIDTH  = 0.1;  // 1.0 = default, larger = thicker neon edges
-const bool  SHOW_LABELS = false; // show star index numbers
+const bool  SHOW_LABELS = true; // show star index numbers
+// @lil-gui-end
 
 mat2 rot(float a) {
     float c = cos(a), s = sin(a);
@@ -185,11 +188,10 @@ void main() {
     vec3 ro = vec3(0.0, 0.0, -2.8);
     vec3 rd = normalize(vec3(uv, 1.6));
 
-    float ballR = 0.85;
     vec3 col = background(uv);
 
     // Intersect sphere
-    vec2 hit = iSphere(ro, rd, ballR);
+    vec2 hit = iSphere(ro, rd, BALL_RADUS);
     if (hit.x > 0.0) {
         vec3 p = ro + rd * hit.x;
         vec3 n = normalize(p);

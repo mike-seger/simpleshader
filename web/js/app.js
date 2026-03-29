@@ -296,7 +296,11 @@ function applyPanelState() {
   document.body.classList.toggle("panel-tune", tuneOn);
   // Only build tuner controls when the editor already has a shader loaded.
   // applyShader() handles the rebuild after async shader fetch completes.
-  if (tuneOn && editor.getValue().trim()) tuner.build();
+  if (tuneOn && editor.getValue().trim()) {
+    tuner.build().then(hasControls => {
+      if (!hasControls) sidebarTuner.classList.add("hidden");
+    });
+  }
   localStorage.setItem("simpleshader_panels", JSON.stringify({ list: listOn, tune: tuneOn }));
 }
 
@@ -469,7 +473,12 @@ async function applyShader(source) {
     timeSlider.value = "0";
     toolbarTime.textContent = "00:00.00";
     // Rebuild tuner controls for the newly loaded shader
-    if (btnModeTune.classList.contains("active")) tuner.build();
+    if (btnModeTune.classList.contains("active")) {
+      tuner.build().then(hasControls => {
+        if (!hasControls) sidebarTuner.classList.add("hidden");
+        else sidebarTuner.classList.remove("hidden");
+      });
+    }
   }
 }
 
