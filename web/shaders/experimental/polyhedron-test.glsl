@@ -13,8 +13,9 @@ const vec4  EDGE_COLOR = vec4(1.0, 0.0, 0.0, 0.95);
 const float EDGE_WIDTH = 0.036;        // @range(0.001, 0.1, 0.001)
 const float EDGE_GLOW = 9.7;          // @range(0.0, 20.0, 0.1)
 
-const vec4  SURFACE_COLOR = vec4(0.1882, 0.5961, 0.9098, 0.79);
+const vec4  SURFACE_COLOR = vec4(0.1882, 0.5961, 0.9098, 0.0);
 const float SURFACE_GLOW = 7.4;       // @range(0.0, 10.0, 0.1)
+const vec4  BODY_COLOR = vec4(0.1, 0.15, 0.25, 0.55);
 
 const vec3  AXIS1_DIR = vec3(0.0, 1.0, 0.3);
 const float AXIS1_SPEED = 30.0;       // @range(-360, 360, 1)
@@ -40,6 +41,7 @@ int faceCountToN(float f) {
 
 // Raymarching constants
 const int   MAX_STEPS = 80;
+const int   BACK_STEPS = 40;
 const float MAX_DIST  = 20.0;
 const float SURF_DIST = 0.001;
 
@@ -111,19 +113,38 @@ void main() {
         // Surface color with lighting
         vec3 lit = LIGHT_COLOR.rgb * LIGHT_INTENSITY;
         vec3 surfCol = SURFACE_COLOR.rgb * (amb + diff * 0.7 * lit) + spec * 0.4 * lit;
-        // Surface glow: brighten based on parameter
         surfCol *= (1.0 + SURFACE_GLOW * 0.1);
 
-        // Edge detection
+        // Front edge detection
         float edgeDist = abs(sceneEdge(rp, N));
         float edgeMask = 1.0 - smoothstep(0.0, EDGE_WIDTH, edgeDist);
-        // Edge glow: soft falloff beyond the hard edge
         float edgeGlow = exp(-edgeDist * EDGE_GLOW * 20.0);
 
-        // Composite: surface + edges
-        col = mix(surfCol, EDGE_COLOR.rgb, edgeMask * EDGE_COLOR.a);
-        col += EDGE_COLOR.rgb * edgeGlow * EDGE_COLOR.a * 0.4;
-        col *= SURFACE_COLOR.a; // overall surface opacity factor
+        // March through to back surface for back-face edges
+        float t2 = t + 0.02;
+        for (int i = 0; i < BACK_STEPS; i++) {
+            vec3 p2 = ro + rd * t2;
+            vec3 rp2 = totalRot * p2;
+            float d2 = sceneSDF(rp2, N);
+            if (d2 > SURF_DIST) break;
+            t2 += max(-d2, 0.005);
+        }
+        vec3 backRP = totalRot * (ro + rd * t2);
+        float backEdgeDist = abs(sceneEdge(backRP, N));
+        float backMask = 1.0 - smoothstep(0.0, EDGE_WIDTH, backEdgeDist);
+        float backGlow = exp(-backEdgeDist * EDGE_GLOW * 20.0);
+
+        // Composite back-to-front: background → back edges → body fill → front surface → front edges
+        // Back edges
+        vec3 backEdge = EDGE_COLOR.rgb * (backMask + backGlow * 0.4) * EDGE_COLOR.a;
+        col = col * (1.0 - backMask * EDGE_COLOR.a) + backEdge;
+        // Body fill
+        col = mix(col, BODY_COLOR.rgb, BODY_COLOR.a);
+        // Front surface
+        col = mix(col, surfCol, SURFACE_COLOR.a);
+        // Front edges
+        vec3 frontEdge = EDGE_COLOR.rgb * (edgeMask + edgeGlow * 0.4) * EDGE_COLOR.a;
+        col = col * (1.0 - edgeMask * EDGE_COLOR.a) + frontEdge;
     } else {
         // Glow around the object for near-misses
         float glowDist = d;
