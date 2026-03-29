@@ -610,12 +610,6 @@ function restoreEmbedded() {
 
 // ── Boot ──────────────────────────────────────────────────
 
-// Close any orphaned pop-out from a previous session
-const orphan = window.open("", "shader_preview");
-if (orphan && !orphan.closed && orphan.location.href !== "about:blank") {
-  orphan.close();
-}
-
 // Close pop-out when the main window unloads (reload / close)
 window.addEventListener("beforeunload", () => {
   if (popoutWin && !popoutWin.closed) popoutWin.close();

@@ -110,6 +110,16 @@ function isDirection(name) {
 }
 
 /**
+ * Parse @options(v1, v2, ...) from a comment. Returns an array of numbers, or null.
+ */
+function parseOptions(comment, type) {
+  if (!comment) return null;
+  const m = comment.match(/@options\(\s*([^)]+)\s*\)/);
+  if (!m) return null;
+  return m[1].split(",").map(s => type === "int" ? parseInt(s.trim(), 10) : parseFloat(s.trim()));
+}
+
+/**
  * Format a float for GLSL (always with decimal point).
  */
 function fmtFloat(v) {
@@ -288,22 +298,19 @@ export default class ShaderTuner {
       return;
     }
 
-    if (p.type === "int") {
+    if (p.type === "int" || p.type === "float") {
       this._proxyObj[p.name] = p.value;
-      const range = getRange(p.name, p.value, p.comment);
-      const c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
-        .name(label)
-        .onChange(() => { this._proxyObj[p.name] = Math.round(this._proxyObj[p.name]); this._apply(p); });
-      if (tip) c.domElement.setAttribute("title", tip);
-      return;
-    }
-
-    if (p.type === "float") {
-      this._proxyObj[p.name] = p.value;
-      const range = getRange(p.name, p.value, p.comment);
-      const c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
-        .name(label)
-        .onChange(() => this._apply(p));
+      const opts = parseOptions(p.comment, p.type);
+      let c;
+      if (opts) {
+        c = parent.add(this._proxyObj, p.name, opts).name(label)
+          .onChange(() => { this._proxyObj[p.name] = Number(this._proxyObj[p.name]); this._apply(p); });
+      } else {
+        const range = getRange(p.name, p.value, p.comment);
+        c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
+          .name(label)
+          .onChange(() => { if (p.type === "int") this._proxyObj[p.name] = Math.round(this._proxyObj[p.name]); this._apply(p); });
+      }
       if (tip) c.domElement.setAttribute("title", tip);
       return;
     }

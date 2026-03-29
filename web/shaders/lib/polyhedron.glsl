@@ -6,6 +6,8 @@
 //   float d = polyhedronSDF(p, N, size);   // N: 4,6,8,12,20
 //   float e = polyhedronEdge(p, N, size);  // distance to nearest edge
 //
+// `size` is always the circumradius (center-to-vertex distance) for all shapes.
+//
 // Rotation helpers:
 //   mat3 rotAxis(vec3 axis, float angle)   // rotation matrix around axis
 //
@@ -29,8 +31,9 @@ mat3 rotAxis(vec3 axis, float angle) {
 
 // ---- Tetrahedron (4 faces) ----
 float tetrahedronSDF(vec3 p, float sz) {
-    // 4 face normals of a regular tetrahedron, normalized
-    float k = sz * 0.57735026919; // sz / sqrt(3)
+    // 4 face normals of a regular tetrahedron, normalized.
+    // sz = circumradius; inscribed radius = sz/3 (R/r = 3 for tetrahedron).
+    float k = sz / 3.0;
     float d = dot(p, vec3( 1, 1, 1));
     d = max(d, dot(p, vec3( 1,-1,-1)));
     d = max(d, dot(p, vec3(-1, 1,-1)));
@@ -39,26 +42,31 @@ float tetrahedronSDF(vec3 p, float sz) {
 }
 
 float tetrahedronEdge(vec3 p, float sz) {
-    float k = sz * 0.57735026919;
     float inv = 0.57735026919;
-    float d0 = dot(p, vec3( 1, 1, 1)) * inv - k;
-    float d1 = dot(p, vec3( 1,-1,-1)) * inv - k;
-    float d2 = dot(p, vec3(-1, 1,-1)) * inv - k;
-    float d3 = dot(p, vec3(-1,-1, 1)) * inv - k;
-    float e = 1e10;
-    e = min(e, max(d0, d1)); e = min(e, max(d0, d2)); e = min(e, max(d0, d3));
-    e = min(e, max(d1, d2)); e = min(e, max(d1, d3)); e = min(e, max(d2, d3));
-    return e;
+    float k = sz / 3.0;
+    float f0 = dot(p, vec3( 1, 1, 1)) * inv;
+    float f1 = dot(p, vec3( 1,-1,-1)) * inv;
+    float f2 = dot(p, vec3(-1, 1,-1)) * inv;
+    float f3 = dot(p, vec3(-1,-1, 1)) * inv;
+    // Second-largest face distance (branchless)
+    float m1 = f0, m2 = -1e10;
+    m2 = max(m2, min(m1, f1)); m1 = max(m1, f1);
+    m2 = max(m2, min(m1, f2)); m1 = max(m1, f2);
+    m2 = max(m2, min(m1, f3)); m1 = max(m1, f3);
+    return m2 - k;
 }
 
 // ---- Cube / Hexahedron (6 faces) ----
+// sz = circumradius; half-side = sz/√3 (R/r = √3 for cube).
 float cubeSDF(vec3 p, float sz) {
-    vec3 d = abs(p) - vec3(sz);
+    float h = sz * 0.57735026919;
+    vec3 d = abs(p) - vec3(h);
     return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
 }
 
 float cubeEdge(vec3 p, float sz) {
-    vec3 q = abs(p) - vec3(sz);
+    float h = sz * 0.57735026919;
+    vec3 q = abs(p) - vec3(h);
     float e = 1e10;
     e = min(e, max(q.x, q.y));
     e = min(e, max(q.x, q.z));

@@ -1,3 +1,4 @@
+#extension GL_OES_standard_derivatives : enable
 precision highp float;
 uniform vec2 u_resolution;
 uniform float u_time;
@@ -5,28 +6,28 @@ uniform float u_time;
 // @include ../lib/polyhedron.glsl
 
 // @lil-gui-start
-const float FACES = 6.0;             // @range(4, 20, 1)
-const float SIZE = 1.11;               // @range(0.1, 2.0, 0.01)
-const float TIME_OFFSET = 27.69;       // @range(-100, 100, 1)
+const float FACES = 20.0;              // @options(4, 6, 8, 12, 20)
+const float SIZE = 1.79;              // @range(0.1, 2.0, 0.01)
+const float TIME_OFFSET = 218.7;      // @range(-100, 100, 1)
 
-const vec4  EDGE_COLOR = vec4(1.0, 0.0, 0.0, 0.95);
-const float EDGE_WIDTH = 0.036;        // @range(0.001, 0.1, 0.001)
-const float EDGE_GLOW = 9.7;          // @range(0.0, 20.0, 0.1)
+const vec4  EDGE_COLOR = vec4(1.0, 0.0, 0.0, 1.0);
+const float EDGE_WIDTH = 0.008;       // @range(0.001, 0.1, 0.001)
+const float EDGE_GLOW = 0.7;          // @range(0.0, 20.0, 0.1)
 
-const vec4  SURFACE_COLOR = vec4(0.1882, 0.5961, 0.9098, 0.0);
+const vec4  SURFACE_COLOR = vec4(0.1882, 0.5961, 0.9098, 0.18);
 const float SURFACE_GLOW = 7.4;       // @range(0.0, 10.0, 0.1)
-const vec4  BODY_COLOR = vec4(0.1, 0.15, 0.25, 0.55);
+const vec4  BODY_COLOR = vec4(0.0588, 0.0588, 0.0627, 0.55);
 
 const vec3  AXIS1_DIR = vec3(0.0, 1.0, 0.3);
 const float AXIS1_SPEED = 30.0;       // @range(-360, 360, 1)
 
-const vec3  AXIS2_DIR = vec3(1.0, 0.0, 0.5);
+const vec3  AXIS2_DIR = vec3(-2.9, 3.2, 0.5);
 const float AXIS2_SPEED = 20.0;       // @range(-360, 360, 1)
 
 const bool  ORTHO = false;
 
 const vec3  LIGHT_DIR = vec3(1.0, 1.5, 2.0);
-const vec4  LIGHT_COLOR = vec4(0.4627, 0.5961, 0.8588, 1.0);
+const vec4  LIGHT_COLOR = vec4(0.1608, 0.4549, 1.0, 1.0);
 const float LIGHT_INTENSITY = 4.3;    // @range(0, 5, 0.05)
 // @lil-gui-end
 
@@ -115,9 +116,10 @@ void main() {
         vec3 surfCol = SURFACE_COLOR.rgb * (amb + diff * 0.7 * lit) + spec * 0.4 * lit;
         surfCol *= (1.0 + SURFACE_GLOW * 0.1);
 
-        // Front edge detection
+        // Front edge detection (fwidth for screen-space AA)
         float edgeDist = abs(sceneEdge(rp, N));
-        float edgeMask = 1.0 - smoothstep(0.0, EDGE_WIDTH, edgeDist);
+        float fw = fwidth(edgeDist);
+        float edgeMask = 1.0 - smoothstep(EDGE_WIDTH - fw, EDGE_WIDTH + fw, edgeDist);
         float edgeGlow = exp(-edgeDist * EDGE_GLOW * 20.0);
 
         // March through to back surface for back-face edges
@@ -131,7 +133,8 @@ void main() {
         }
         vec3 backRP = totalRot * (ro + rd * t2);
         float backEdgeDist = abs(sceneEdge(backRP, N));
-        float backMask = 1.0 - smoothstep(0.0, EDGE_WIDTH, backEdgeDist);
+        float bfw = fwidth(backEdgeDist);
+        float backMask = 1.0 - smoothstep(EDGE_WIDTH - bfw, EDGE_WIDTH + bfw, backEdgeDist);
         float backGlow = exp(-backEdgeDist * EDGE_GLOW * 20.0);
 
         // Composite back-to-front: background → back edges → body fill → front surface → front edges
