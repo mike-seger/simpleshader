@@ -131,6 +131,7 @@ function convertChunk(src) {
   );
 
   // Remove WebGL1-specific declarations
+  out = out.replace(/^#extension\s+GL_OES_standard_derivatives\s*:\s*\w+\s*\n/m, '');
   out = out.replace(/^precision\s+\w+\s+\w+;\s*\n/m, '');
   out = out.replace(/^uniform\s+vec2\s+u_resolution;[^\n]*\n/m, '');
   out = out.replace(/^uniform\s+float\s+u_time;[^\n]*\n/m, '');
@@ -314,15 +315,15 @@ btnModeTune.addEventListener("click", () => {
   applyPanelState();
 });
 
-// Restore panel state from localStorage (default: list open)
+// Restore panel state from localStorage (default: list + tune open)
 {
-  let saved = { list: true, tune: false };
+  let saved = { list: true, tune: true };
   try {
     const raw = localStorage.getItem("simpleshader_panels");
     if (raw) {
       const parsed = JSON.parse(raw);
       saved.list = parsed.list ?? true;
-      saved.tune = parsed.tune ?? false;
+      saved.tune = parsed.tune ?? true;
     }
   } catch { /* ignore */ }
   // Default to list open if nothing is active
@@ -436,7 +437,9 @@ async function resolveIncludes(src, baseUrl) {
     const url = new URL(m[1], baseUrl).href;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`@include ${m[1]}: HTTP ${res.status}`);
-    return res.text();
+    const text = await res.text();
+    // Recursively resolve nested includes relative to the included file
+    return resolveIncludes(text, url);
   }));
   return resolved.join('\n');
 }
@@ -615,9 +618,22 @@ window.addEventListener("beforeunload", () => {
   if (popoutWin && !popoutWin.closed) popoutWin.close();
 });
 
-const lastKey = localStorage.getItem("simpleshader_last");
-if (!lastKey || !sidebar.selectByKey(lastKey)) {
-  sidebar.selectFirst();
+// Check for ?shader= query parameter first, then fall back to localStorage
+{
+  const params = new URLSearchParams(window.location.search);
+  const shaderParam = params.get("shader");
+  let booted = false;
+  if (shaderParam) {
+    // Resolve relative to web/shaders/
+    const path = "web/shaders/" + shaderParam;
+    booted = sidebar.selectByKey(path);
+  }
+  if (!booted) {
+    const lastKey = localStorage.getItem("simpleshader_last");
+    if (!lastKey || !sidebar.selectByKey(lastKey)) {
+      sidebar.selectFirst();
+    }
+  }
 }
 
 // Restore paused state

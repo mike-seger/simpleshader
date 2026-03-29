@@ -6,8 +6,6 @@ uniform float u_time;
 // @include ../lib/polyhedron.glsl
 
 // @lil-gui-start
-const float FACES = 20.0;              // @options(4, 6, 8, 12, 20)
-const float SIZE = 1.79;              // @range(0.1, 2.0, 0.01)
 const float TIME_OFFSET = 218.7;      // @range(-100, 100, 1)
 
 const vec4  EDGE_COLOR = vec4(1.0, 0.0, 0.0, 1.0);
@@ -31,129 +29,59 @@ const vec4  LIGHT_COLOR = vec4(0.1608, 0.4549, 1.0, 1.0);
 const float LIGHT_INTENSITY = 4.3;    // @range(0, 5, 0.05)
 // @lil-gui-end
 
-// Convert FACES float to nearest supported int (4,6,8,12,20)
-int faceCountToN(float f) {
-    if (f < 5.0)  return 4;
-    if (f < 7.0)  return 6;
-    if (f < 10.0) return 8;
-    if (f < 16.0) return 12;
-    return 20;
-}
-
-// Raymarching constants
-const int   MAX_STEPS = 80;
-const int   BACK_STEPS = 40;
-const float MAX_DIST  = 20.0;
-const float SURF_DIST = 0.001;
-
-float sceneSDF(vec3 p, int N) {
-    return polyhedronSDF(p, N, SIZE);
-}
-
-float sceneEdge(vec3 p, int N) {
-    return polyhedronEdge(p, N, SIZE);
-}
-
-vec3 calcNormal(vec3 p, int N) {
-    vec2 e = vec2(0.001, 0.0);
-    return normalize(vec3(
-        sceneSDF(p + e.xyy, N) - sceneSDF(p - e.xyy, N),
-        sceneSDF(p + e.yxy, N) - sceneSDF(p - e.yxy, N),
-        sceneSDF(p + e.yyx, N) - sceneSDF(p - e.yyx, N)
-    ));
-}
-
 void main() {
     float s = min(u_resolution.x, u_resolution.y);
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / s;
 
-    int N = faceCountToN(FACES);
-
-    // Build rotation from two axes
+    // Common time factor (degrees → radians)
     float time = u_time + TIME_OFFSET;
-    float a1 = AXIS1_SPEED * time * 0.01745329252; // deg → rad
-    float a2 = AXIS2_SPEED * time * 0.01745329252;
-    mat3 rot1 = rotAxis(AXIS1_DIR, a1);
-    mat3 rot2 = rotAxis(AXIS2_DIR, a2);
-    mat3 totalRot = rot2 * rot1;
+    float t = time * 0.01745329252;
 
     // Camera
     vec3 ro = ORTHO ? vec3(uv * 2.5, 5.0) : vec3(0.0, 0.0, 3.5);
     vec3 rd = ORTHO ? vec3(0.0, 0.0, -1.0) : normalize(vec3(uv, -1.5));
 
-    // Raymarch
-    float t = 0.0;
-    float d = 0.0;
-    for (int i = 0; i < MAX_STEPS; i++) {
-        vec3 p = ro + rd * t;
-        vec3 rp = totalRot * p; // rotate query point (equivalent to rotating the object)
-        d = sceneSDF(rp, N);
-        if (d < SURF_DIST || t > MAX_DIST) break;
-        t += d;
-    }
+    // Material + light from constants (edgeColor overridden per shape)
+    Material mat = Material(EDGE_COLOR, EDGE_WIDTH, EDGE_GLOW, SURFACE_COLOR, SURFACE_GLOW, BODY_COLOR);
+    Light light = Light(normalize(LIGHT_DIR), LIGHT_COLOR.rgb, LIGHT_INTENSITY);
 
-    vec3 col = vec3(0.02, 0.02, 0.04); // background
+    vec3 col = vec3(0.02, 0.02, 0.04);
 
-    if (t < MAX_DIST) {
-        vec3 p = ro + rd * t;
-        vec3 rp = totalRot * p;
-        vec3 n = calcNormal(rp, N);
-        // Un-rotate normal back to world space for lighting
-        vec3 wn = vec3(
-            dot(vec3(totalRot[0][0], totalRot[1][0], totalRot[2][0]), n),
-            dot(vec3(totalRot[0][1], totalRot[1][1], totalRot[2][1]), n),
-            dot(vec3(totalRot[0][2], totalRot[1][2], totalRot[2][2]), n)
-        );
+    // All 5 Platonic solids in quincunx layout:
+    //   4(tetra)   6(cube)
+    //       20(icosa)
+    //   8(octa)   12(dodeca)
+    float sz = 0.85;
+    vec3 p1 = vec3(-1.6,  1.2, 0.0);
+    vec3 p2 = vec3( 1.6,  1.2, 0.0);
+    vec3 p3 = vec3(-1.6, -1.2, 0.0);
+    vec3 p4 = vec3( 1.6, -1.2, 0.0);
+    vec3 p5 = vec3( 0.0,  0.0, 0.0);
 
-        // Directional light
-        vec3 lightDir = normalize(LIGHT_DIR);
-        float diff = max(dot(wn, lightDir), 0.0);
-        float spec = pow(max(dot(reflect(-lightDir, wn), -rd), 0.0), 32.0);
-        float amb = 0.15;
+    // 4: tetrahedron — amber
+    mat.edgeColor = vec4(0.8941, 0.5059, 0.0667, 1.0);
+    renderPolyhedron(ro - p1, rd, rotAxis(AXIS2_DIR, 10.0*t) * rotAxis(vec3(4.0, 5.0, 0.3), 8.0*t),
+                     4, sz, mat, light, col);
 
-        // Surface color with lighting
-        vec3 lit = LIGHT_COLOR.rgb * LIGHT_INTENSITY;
-        vec3 surfCol = SURFACE_COLOR.rgb * (amb + diff * 0.7 * lit) + spec * 0.4 * lit;
-        surfCol *= (1.0 + SURFACE_GLOW * 0.1);
+    // 6: cube — blue
+    mat.edgeColor = vec4(0.0, 0.298, 1.0, 1.0);
+    renderPolyhedron(ro - p2, rd, rotAxis(AXIS2_DIR, 15.0*t) * rotAxis(vec3(0.0, 8.2, 0.3), 12.0*t),
+                     6, sz, mat, light, col);
 
-        // Front edge detection (fwidth for screen-space AA)
-        float edgeDist = abs(sceneEdge(rp, N));
-        float fw = fwidth(edgeDist);
-        float edgeMask = 1.0 - smoothstep(EDGE_WIDTH - fw, EDGE_WIDTH + fw, edgeDist);
-        float edgeGlow = exp(-edgeDist * EDGE_GLOW * 20.0);
+    // 8: octahedron — yellow
+    mat.edgeColor = vec4(1.0, 0.9686, 0.0, 1.0);
+    renderPolyhedron(ro - p3, rd, rotAxis(AXIS2_DIR, 12.0*t) * rotAxis(vec3(0.0, 1.0, 9.2), 18.0*t),
+                     8, sz, mat, light, col);
 
-        // March through to back surface for back-face edges
-        float t2 = t + 0.02;
-        for (int i = 0; i < BACK_STEPS; i++) {
-            vec3 p2 = ro + rd * t2;
-            vec3 rp2 = totalRot * p2;
-            float d2 = sceneSDF(rp2, N);
-            if (d2 > SURF_DIST) break;
-            t2 += max(-d2, 0.005);
-        }
-        vec3 backRP = totalRot * (ro + rd * t2);
-        float backEdgeDist = abs(sceneEdge(backRP, N));
-        float bfw = fwidth(backEdgeDist);
-        float backMask = 1.0 - smoothstep(EDGE_WIDTH - bfw, EDGE_WIDTH + bfw, backEdgeDist);
-        float backGlow = exp(-backEdgeDist * EDGE_GLOW * 20.0);
+    // 12: dodecahedron — green
+    mat.edgeColor = vec4(0.0, 1.0, 0.349, 1.0);
+    renderPolyhedron(ro - p4, rd, rotAxis(AXIS2_DIR, -10.0*t) * rotAxis(vec3(0.0, 1.0, 8.2), 24.0*t),
+                     12, sz, mat, light, col);
 
-        // Composite back-to-front: background → back edges → body fill → front surface → front edges
-        // Back edges
-        vec3 backEdge = EDGE_COLOR.rgb * (backMask + backGlow * 0.4) * EDGE_COLOR.a;
-        col = col * (1.0 - backMask * EDGE_COLOR.a) + backEdge;
-        // Body fill
-        col = mix(col, BODY_COLOR.rgb, BODY_COLOR.a);
-        // Front surface
-        col = mix(col, surfCol, SURFACE_COLOR.a);
-        // Front edges
-        vec3 frontEdge = EDGE_COLOR.rgb * (edgeMask + edgeGlow * 0.4) * EDGE_COLOR.a;
-        col = col * (1.0 - edgeMask * EDGE_COLOR.a) + frontEdge;
-    } else {
-        // Glow around the object for near-misses
-        float glowDist = d;
-        float outerGlow = exp(-glowDist * 3.0) * 0.15;
-        col += EDGE_COLOR.rgb * outerGlow;
-    }
+    // 20: icosahedron — magenta
+    mat.edgeColor = vec4(1.0, 0.0, 0.584, 1.0);
+    renderPolyhedron(ro - p5, rd, rotAxis(AXIS2_DIR, 24.0*t) * rotAxis(AXIS1_DIR, 30.0*t),
+                     20, sz, mat, light, col);
 
     // Tone mapping
     col = col / (col + vec3(1.0));

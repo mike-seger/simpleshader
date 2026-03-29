@@ -1,4 +1,13 @@
-// https://www.shadertoy.com/view/scBGWd
+/*
+    Source: https://www.shadertoy.com/view/scBGWd
+    The license if not specified by the author is assumed to be:
+    This work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+    
+    Please see the original shader for comments and description. 
+
+    This is a slightly modified copy of the shader code, with only minor edits to make it compatible with SimpleShader 
+    (e.g. renaming mainImage to main, stubbing iChannel0, etc.). If you intend to reuse this shader, please add credits to 'mcetinkaya'.
+*/
 precision highp float;
 uniform vec2 u_resolution;
 uniform float u_time;

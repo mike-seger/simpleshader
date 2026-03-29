@@ -102,7 +102,7 @@ function getRange(name, value, comment) {
 }
 
 function isColor(name) {
-  return /_COLOR\d*$/i.test(name) || /_TINT\d*$/i.test(name);
+  return /(?:^|_)COLOR\d*$/i.test(name) || /_TINT\d*$/i.test(name);
 }
 
 function isDirection(name) {
@@ -110,13 +110,26 @@ function isDirection(name) {
 }
 
 /**
- * Parse @options(v1, v2, ...) from a comment. Returns an array of numbers, or null.
+ * Parse @options(v1, v2, ...) or @options(v1:Label1, v2:Label2, ...) from a comment.
+ * Returns an array of numbers (plain) or a {value: label} object (labelled), or null.
  */
 function parseOptions(comment, type) {
   if (!comment) return null;
   const m = comment.match(/@options\(\s*([^)]+)\s*\)/);
   if (!m) return null;
-  return m[1].split(",").map(s => type === "int" ? parseInt(s.trim(), 10) : parseFloat(s.trim()));
+  const parts = m[1].split(",").map(s => s.trim());
+  // Check if any part has a label (value:label)
+  if (parts.some(p => p.includes(":"))) {
+    const obj = {};
+    for (const p of parts) {
+      const [val, ...rest] = p.split(":");
+      const label = rest.join(":").trim() || val.trim();
+      const num = type === "int" ? parseInt(val.trim(), 10) : parseFloat(val.trim());
+      obj[label] = num;
+    }
+    return obj;
+  }
+  return parts.map(s => type === "int" ? parseInt(s, 10) : parseFloat(s));
 }
 
 /**
@@ -210,7 +223,7 @@ export default class ShaderTuner {
 
     const GUI = await loadLilGui();
     this._gui = new GUI({ container: this._container, autoPlace: false, width: 200 });
-    this._gui.title("Shader Controls");
+    this._gui.title("Controls");
     this._proxyObj = {};
 
     // Group consecutive constants by first prefix (e.g. STAR from STAR_SIZE)
@@ -305,6 +318,21 @@ export default class ShaderTuner {
       if (opts) {
         c = parent.add(this._proxyObj, p.name, opts).name(label)
           .onChange(() => { this._proxyObj[p.name] = Number(this._proxyObj[p.name]); this._apply(p); });
+        // Arrow left/right to cycle options without opening the dropdown
+        const sel = c.domElement.querySelector("select");
+        if (sel) {
+          sel.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              e.preventDefault();
+              const dir = e.key === "ArrowLeft" ? -1 : 1;
+              const idx = sel.selectedIndex + dir;
+              if (idx >= 0 && idx < sel.options.length) {
+                sel.selectedIndex = idx;
+                sel.dispatchEvent(new Event("change"));
+              }
+            }
+          });
+        }
       } else {
         const range = getRange(p.name, p.value, p.comment);
         c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)

@@ -130,7 +130,7 @@ body {
   text-overflow: ellipsis;
 }
 .tree-item:hover { background: #2a2d2e; }
-.tree-item.active { background: #094771; color: #fff; }
+.tree-item.active { background: #094771; color: #fff; outline: 2px solid #007acc; outline-offset: -2px; }
 
 /* ── Main area ─────────────────────────────────────────── */
 #main {

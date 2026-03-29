@@ -13,7 +13,6 @@
     * it is also referred from https://shader-slang.org/slang-playground/
 */
 
-
 precision highp float;
 uniform vec2 u_resolution;
 uniform float u_time;

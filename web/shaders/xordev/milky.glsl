@@ -1,3 +1,8 @@
+/*
+    Built by @XorDev
+    https://fragcoord.xyz/
+*/
+
 precision highp float;
 
 uniform vec2 u_resolution;

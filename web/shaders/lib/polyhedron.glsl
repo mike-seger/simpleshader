@@ -1,28 +1,17 @@
 // ── polyhedron.glsl ───────────────────────────────────────────────────────────
 // Reusable regular-polyhedron SDF library (Platonic solids).
-// No dependencies — pure math, no uniforms required.
 //
 // Usage:
 //   float d = polyhedronSDF(p, N, size);   // N: 4,6,8,12,20
 //   float e = polyhedronEdge(p, N, size);  // distance to nearest edge
+//   float t = renderPolyhedron(ro, rd, rot, N, sz, mat, light, col);
 //
 // `size` is always the circumradius (center-to-vertex distance) for all shapes.
-//
-// Rotation helpers:
-//   mat3 rotAxis(vec3 axis, float angle)   // rotation matrix around axis
+// Structs Material, Light, and rotAxis() come from sdf-utils.glsl.
 //
 // All parameters are dynamic (no compile-time constants needed).
 
-// ── Rotation around an arbitrary axis ────────────────────────────────────────
-mat3 rotAxis(vec3 axis, float angle) {
-    vec3 a = normalize(axis);
-    float s = sin(angle), c = cos(angle), oc = 1.0 - c;
-    return mat3(
-        oc * a.x * a.x + c,       oc * a.x * a.y - a.z * s, oc * a.x * a.z + a.y * s,
-        oc * a.x * a.y + a.z * s, oc * a.y * a.y + c,       oc * a.y * a.z - a.x * s,
-        oc * a.x * a.z - a.y * s, oc * a.y * a.z + a.x * s, oc * a.z * a.z + c
-    );
-}
+// @include sdf-utils.glsl
 
 // ── Internal: face-plane SDF ─────────────────────────────────────────────────
 // A regular polyhedron = intersection of half-spaces: max(dot(p, n_i)) - r.
@@ -214,4 +203,89 @@ float polyhedronEdge(vec3 p, int N, float size) {
     if (N <= 8)  return octahedronEdge(p, size);
     if (N <= 12) return dodecahedronEdge(p, size);
     return icosahedronEdge(p, size);
+}
+
+// ── Render one polyhedron ────────────────────────────────────────────────────
+// Raymarches, lights, detects edges (front + back), and composites onto `col`.
+// Returns hit distance (MAX_DIST on miss).
+//   ro, rd   — ray origin and direction (world space)
+//   rot      — rotation matrix applied to query points
+//   N        — face count (4,6,8,12,20)
+//   sz       — circumradius
+//   m        — Material (edges, surface, body)
+//   light    — Light (direction, color, intensity)
+//   col      — accumulated color (inout)
+float renderPolyhedron(
+    vec3 ro, vec3 rd,
+    mat3 rot, int N, float sz,
+    Material m, Light light,
+    inout vec3 col
+) {
+    // Raymarch
+    float t = 0.0;
+    float d = 0.0;
+    for (int i = 0; i < MAX_STEPS; i++) {
+        vec3 rp = rot * (ro + rd * t);
+        d = polyhedronSDF(rp, N, sz);
+        if (d < SURF_DIST || t > MAX_DIST) break;
+        t += d;
+    }
+
+    if (t >= MAX_DIST) {
+        col += m.edgeColor.rgb * exp(-d * 3.0) * 0.15;
+        return MAX_DIST;
+    }
+
+    vec3 rp = rot * (ro + rd * t);
+
+    // Normal via central differences
+    vec2 e = vec2(0.001, 0.0);
+    vec3 n = normalize(vec3(
+        polyhedronSDF(rp + e.xyy, N, sz) - polyhedronSDF(rp - e.xyy, N, sz),
+        polyhedronSDF(rp + e.yxy, N, sz) - polyhedronSDF(rp - e.yxy, N, sz),
+        polyhedronSDF(rp + e.yyx, N, sz) - polyhedronSDF(rp - e.yyx, N, sz)
+    ));
+    // Un-rotate normal to world space (transpose = inverse for orthogonal mat)
+    vec3 wn = vec3(
+        dot(vec3(rot[0][0], rot[1][0], rot[2][0]), n),
+        dot(vec3(rot[0][1], rot[1][1], rot[2][1]), n),
+        dot(vec3(rot[0][2], rot[1][2], rot[2][2]), n)
+    );
+
+    // Lighting
+    float diff = max(dot(wn, light.dir), 0.0);
+    float spec = pow(max(dot(reflect(-light.dir, wn), -rd), 0.0), 32.0);
+    vec3 lit = light.color * light.intensity;
+    vec3 surfCol = m.surfaceColor.rgb * (0.15 + diff * 0.7 * lit) + spec * 0.4 * lit;
+    surfCol *= 1.0 + m.surfaceGlow * 0.1;
+
+    // Front edge detection (fwidth for screen-space AA)
+    float edgeDist = abs(polyhedronEdge(rp, N, sz));
+    float fw = fwidth(edgeDist);
+    float edgeMask = 1.0 - smoothstep(m.edgeWidth - fw, m.edgeWidth + fw, edgeDist);
+    float edgeGlow = exp(-edgeDist * m.edgeGlow * 20.0);
+
+    // March through to back surface for back-face edges
+    float t2 = t + 0.02;
+    for (int i = 0; i < BACK_STEPS; i++) {
+        vec3 rp2 = rot * (ro + rd * t2);
+        float d2 = polyhedronSDF(rp2, N, sz);
+        if (d2 > SURF_DIST) break;
+        t2 += max(-d2, 0.005);
+    }
+    vec3 backRP = rot * (ro + rd * t2);
+    float backEdgeDist = abs(polyhedronEdge(backRP, N, sz));
+    float bfw = fwidth(backEdgeDist);
+    float backMask = 1.0 - smoothstep(m.edgeWidth - bfw, m.edgeWidth + bfw, backEdgeDist);
+    float backGlow = exp(-backEdgeDist * m.edgeGlow * 20.0);
+
+    // Composite back-to-front: background → back edges → body → surface → front edges
+    vec3 backEdge = m.edgeColor.rgb * (backMask + backGlow * 0.4) * m.edgeColor.a;
+    col = col * (1.0 - backMask * m.edgeColor.a) + backEdge;
+    col = mix(col, m.bodyColor.rgb, m.bodyColor.a);
+    col = mix(col, surfCol, m.surfaceColor.a);
+    vec3 frontEdge = m.edgeColor.rgb * (edgeMask + edgeGlow * 0.4) * m.edgeColor.a;
+    col = col * (1.0 - edgeMask * m.edgeColor.a) + frontEdge;
+
+    return t;
 }
