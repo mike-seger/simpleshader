@@ -23,6 +23,8 @@ export default class Renderer {
     this.gl = canvas.getContext("webgl", { antialias: false, preserveDrawingBuffer: true });
     if (!this.gl) throw new Error("WebGL not supported");
 
+    this.pixelRatio = 1;     // render at CSS pixel resolution by default
+
     this._program = null;   // single-pass program
     this._uTime = null;
     this._uResolution = null;
@@ -290,7 +292,7 @@ export default class Renderer {
 
   /** Immediately resize the canvas pixel buffer to match its CSS size. */
   resize() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = this.pixelRatio;
     const w = this.canvas.clientWidth * dpr | 0;
     const h = this.canvas.clientHeight * dpr | 0;
     if (w === 0 || h === 0) return;

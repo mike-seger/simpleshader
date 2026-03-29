@@ -23,14 +23,19 @@ void main() {
               + vec2(sin(T * 0.2) * 0.3, sin(T * 0.5) * 0.1);
     gl_FragColor = vec4(0.0);
 
-    for (int i = 0; i < 128; i++) {
+    float tanhT  = tanh1(T);
+    float px_off = 1e2 - cos(T) * 1e1 + sin(T) * 1e1;
+    float sinT   = sin(T);
+
+    for (int i = 0; i < 64; i++) {
         vec3 p = vec3(uv * d, d + T * 1e2);
-        p.z += cos(p.z * 0.7) + sin(p.z * 0.7) + tanh1(T);
-        p.x += 1e2 - cos(T) * 1e1 + sin(T) * 1e1;
+        p.z += 1.41421356 * sin(p.z * 0.7 + 0.78539816) + tanhT;
+        p.x += px_off;
         p += cos(p.yzx / 16.0) * 16.0 + sin(p.yzx / 32.0) * 8.0;
         s = 0.005 + 0.8 * abs(32.0 * dot(sin(p / 132.0), cos(p.yzx / 94.0) + sin(p.yzx / 43.0)));
         d += s;
-        gl_FragColor += (1.0 + cos(0.03 * p.y + vec4(3.0, 1.0, 0.0, 0.0))) / s + sin(T);
+        gl_FragColor += (1.0 + cos(0.03 * p.y + vec4(3.0, 1.0, 0.0, 0.0))) / s + sinT;
     }
     gl_FragColor = tanh4(gl_FragColor / 3e3);
+    gl_FragColor.a = 1.0;
 }

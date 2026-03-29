@@ -13,7 +13,7 @@ const vec4  STAR_COLOR          = vec4(0.8706, 0.8745, 0.9098, 0.95); // star fi
 const float STAR_INTENSITY      = 1.5;   // star fill brightness multiplier
 const float STAR_EDGE_WIDTH     = 0.1;   // 1.0 = default, larger = thicker neon edges
 const vec4  STAR_EDGE_COLOR     = vec4(0.8392, 0.9216, 1.0, 1.0);   // blue-cyan edge color
-const vec4  STAR_EDGE_COLOR2    = vec4(0.55, 0.1, 0.8755, 1.0);  // purple edge color (gradient)
+const vec4  STAR_EDGE_COLOR2    = vec4(0.098, 0.3333, 0.8824, 1.0);  // purple edge color (gradient)
 const float STAR_EDGE_INTENSITY = 2.0;   // edge glow brightness multiplier
 const vec4  SPHERE_COLOR        = vec4(0.1137, 0.1294, 0.6863, 0.95); // sphere color (rgb + opacity)
 const float SPHERE_INTENSITY    = 1.0;   // sphere brightness multiplier
@@ -35,6 +35,7 @@ const float CLOUD_BRIGHTNESS    = 2000.0; // tone-mapping divisor (higher = dark
 const vec3  CLOUD_TINT          = vec3(1.5, 2.0, 4.0); // cloud color tint
 const float CLOUD_GLOW          = 0.4;   // sphere glow bleeding into clouds
 // @lil-gui-end
+
 // ── tanh approximation (not in GLSL ES 1.00) ──────────────
 vec4 tanh_safe(vec4 x) {
     vec4 cx = clamp(x, -10.0, 10.0);
