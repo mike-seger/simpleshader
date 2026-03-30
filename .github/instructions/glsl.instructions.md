@@ -23,8 +23,8 @@ Only these uniforms are available (do not declare others):
 ```glsl
 uniform vec2  u_resolution;   // canvas size in pixels
 uniform float u_time;          // elapsed seconds
-uniform sampler2D u_channel0;  // multipass only: previous pass output
-uniform sampler2D u_channel1;  // multipass only: pass before that
+uniform sampler2D u_channel0;  // multipass: previous pass / @iChannel media
+uniform sampler2D u_channel1;  // multipass: pass before that / @iChannel media
 ```
 
 When porting from Shadertoy, replace:
@@ -62,6 +62,18 @@ Gate pattern: a `const bool NAME` followed by `NAME_*` siblings → the bool bec
 ```
 
 Paths are relative to the shader file's location.
+
+## @iChannel Media Inputs
+
+Load external images or audio as sampler inputs:
+```glsl
+// @iChannel0 media/audio.mp3  audio   — audio FFT texture (256×2 LUMINANCE)
+// @iChannel1 media/image.jpg          — static image texture
+```
+
+Paths resolve relative to the shader file URL. The `uniform sampler2D u_channel*` declarations are injected automatically.
+
+Audio channels produce a 256×2 texture: row 0 = frequency data, row 1 = waveform (like Shadertoy).
 
 ## Common Patterns
 

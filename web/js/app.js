@@ -8,6 +8,7 @@ import Sidebar from "./sidebar.js";
 import { initSplitter } from "./splitter.js";
 import { upsertCustomShader, loadCustomShaders } from "./store.js";
 import ShaderTuner from "./shader-tuner.js";
+import { MediaLoader, parseMediaAnnotations } from "./media-loader.js";
 
 // ── DOM refs ──────────────────────────────────────────────
 const canvas        = document.getElementById("glcanvas");
@@ -48,6 +49,8 @@ let sliderDragging = false;
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
+const mediaLoader = new MediaLoader(renderer.gl);
+renderer.mediaLoader = mediaLoader;
 function fpsHandler(fps) {
   fpsDisplay.textContent = fps + " FPS";
   const t = activeRenderer().getTime();
@@ -69,6 +72,9 @@ function fpsHandler(fps) {
 }
 renderer.onFps = fpsHandler;
 renderer.start();
+
+// Resume audio on first user interaction (autoplay policy)
+document.addEventListener("click", () => mediaLoader.resumeAudio(), { once: true });
 
 // Update toolbar time + slider at 10 Hz
 function formatToolbarTime(t) {
@@ -282,6 +288,7 @@ const tuner = new ShaderTuner(
     let resolved;
     try { resolved = await resolveForCurrent(source); }
     catch (e) { showError(String(e)); return; }
+    resolved = injectChannelUniforms(resolved);
     const err = activeRenderer().compile(resolved, true);
     if (err) showError(err); else hideError();
   },
@@ -452,11 +459,33 @@ async function resolveForCurrent(source) {
   return resolveIncludes(source, baseUrl);
 }
 
+/** Inject uniform sampler2D declarations for any active media channels. */
+function injectChannelUniforms(resolved) {
+  if (!mediaLoader.hasMedia) return resolved;
+  const decls = [...mediaLoader.channels.keys()]
+    .map(c => `uniform sampler2D u_channel${c};`).join('\n');
+  return resolved.replace(/(precision\s+\S+\s+\S+;)/, `$1\n${decls}`);
+}
+
 async function applyShader(source) {
   // Save to custom storage if editing a custom shader
   if (currentName) {
     sidebar.saveToCustom(currentName, source);
   }
+
+  // Parse and load @iChannel media annotations
+  const baseUrl = currentPath
+    ? new URL(currentPath, window.location.href).href
+    : window.location.href;
+  const mediaAnns = parseMediaAnnotations(source);
+  try {
+    await mediaLoader.load(mediaAnns, baseUrl);
+  } catch (e) {
+    showError(String(e));
+    return;
+  }
+  // Assign to active renderer
+  activeRenderer().mediaLoader = mediaLoader;
 
   let resolved;
   try {
@@ -465,6 +494,8 @@ async function applyShader(source) {
     showError(String(e));
     return;
   }
+
+  resolved = injectChannelUniforms(resolved);
 
   const err = activeRenderer().compile(resolved);
   if (err) {
@@ -575,8 +606,9 @@ function openPopout() {
 
   const r = new Renderer(c);
   popoutWin._renderer = r;
+  r.mediaLoader = mediaLoader;
   r.onFps = fpsHandler;
-  resolveForCurrent(editor.getValue()).then(src => r.compile(src));
+  resolveForCurrent(editor.getValue()).then(src => r.compile(injectChannelUniforms(src)));
   // Sync pause state
   if (renderer.paused) r.togglePause();
   r.start();
@@ -607,7 +639,7 @@ function restoreEmbedded() {
   editorPane.style.flex = _savedEditorFlex;
   editorPane.style.height = _savedEditorHeight;
   // Recompile current source into embedded renderer so it's in sync
-  resolveForCurrent(editor.getValue()).then(src => { renderer.compile(src); renderer.start(); });
+  resolveForCurrent(editor.getValue()).then(src => { renderer.compile(injectChannelUniforms(src)); renderer.start(); });
   editor.layout();
 }
 

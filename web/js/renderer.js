@@ -34,6 +34,7 @@ export default class Renderer {
     this._error = null;
     this._paused = false;
     this._pauseTime = 0;
+    this.mediaLoader = null;  // optional MediaLoader for @iChannel textures
 
     // FPS tracking
     this._frames = 0;
@@ -400,12 +401,18 @@ export default class Renderer {
     gl.useProgram(this._program);
     if (this._uTime !== null)       gl.uniform1f(this._uTime, this.getTime());
     if (this._uResolution !== null)  gl.uniform2f(this._uResolution, w, h);
+    if (this.mediaLoader?.hasMedia) {
+      this.mediaLoader.updateAudio();
+      this.mediaLoader.bind(0);
+      this.mediaLoader.setUniforms(this._program, 0);
+    }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   _drawMultipass(w, h) {
     const gl = this.gl;
     const t = this.getTime();
+    if (this.mediaLoader?.hasMedia) this.mediaLoader.updateAudio();
 
     for (let i = 0; i < this._passes.length; i++) {
       const pass = this._passes[i];
@@ -441,6 +448,12 @@ export default class Renderer {
           gl.bindTexture(gl.TEXTURE_2D, this._passes[c].tex);
           gl.uniform1i(pass.uChannels[c], c);
         }
+      }
+
+      // Bind media channels (offset past pass channels)
+      if (this.mediaLoader?.hasMedia) {
+        this.mediaLoader.bind(i);
+        this.mediaLoader.setUniforms(pass.prog, i);
       }
 
       // Configure the vertex attribute for this program
