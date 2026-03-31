@@ -9,15 +9,16 @@ uniform float u_time;
 // @lil-gui-start
 const vec3 LIGHT_DIR = vec3(-3.6, 3.0, -1.9);
 const vec3 LIGHT_COLOR = vec3(1.0, 0.98, 0.95);
-const float LIGHT_INTENSITY = 1.0;    // @range(0.0, 5.0, 0.05)
-const float LIGHT_DIFFUSION = 0.6;    // @range(0.0, 2.0, 0.05)
+const float LIGHT_INTENSITY = 0.9;    // @range(0.0, 5.0, 0.05)
+const float LIGHT_DIFFUSION = 1.5;    // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;       // @range(0.0, 2.0, 0.05)
+const float CAMERA_ANGLE = 180.0;      // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
 const float ZOOM = 3.4;               // @range(0.5, 4.0, 0.05)
 const float BASE_HEIGHT = 1.275;      // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
-const float WAX_HEIGHT = 1.35;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
+const float WAX_HEIGHT = 0.5;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
 const float WAX_ANGLE = 55.5;         // @range(0.0, 75.0, 0.5) @label Cut Angle (degrees)
-const float WAX_CHAMFER = 0.145;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
+const float WAX_CHAMFER = 0.115;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
@@ -309,6 +310,9 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
         float grazeFade = smoothstep(0.0, 0.08, graze);
         vec3 skyFall = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), 0.5 + 0.5 * reflDir.y);
         reflColor = mix(skyFall, reflColor, grazeFade);
+        // Distance fade — far reflections blur to sky (reduces aliased edges)
+        float distFade = 1.0 - smoothstep(2.0, 8.0, reflHit.x);
+        reflColor = mix(skyFall, reflColor, distFade);
     } else {
         float skyT = 0.5 + 0.5 * reflDir.y;
         reflColor = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), skyT);
@@ -322,8 +326,8 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     if (encodedId < 0.5) {
         reflAmount = reflectivity * fres * 0.3;
     } else if (mat < 1.5) {
-        // Black plastic — Fresnel-driven gloss
-        reflAmount = mix(0.04, 0.8, fres);
+        // Black plastic — subtle gloss (keeps sheen without aliased reflected edges)
+        reflAmount = mix(0.02, 0.35, fres);
     } else {
         // Gold collar — strong metallic mirror
         reflAmount = mix(reflectivity * 0.5, 1.0, fres);
@@ -336,7 +340,7 @@ void main() {
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.x, u_resolution.y);
 
     // Orbiting camera
-    float angle = u_time * CAMERA_SPEED;
+    float angle = radians(CAMERA_ANGLE) + u_time * CAMERA_SPEED;
     float camDist = 8.0;
     float camHeight = 4.5;
     vec3 ro = vec3(camDist * cos(angle), camHeight, camDist * sin(angle));
