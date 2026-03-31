@@ -19,10 +19,14 @@ const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
 const float WAX_HEIGHT = 0.5;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
 const float WAX_ANGLE = 55.5;         // @range(0.0, 75.0, 0.5) @label Cut Angle (degrees)
 const float WAX_CHAMFER = 0.115;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
+const float GRID_NX = 4.0;            // @range(1.0, 7.0, 1.0) @label Columns
+const float GRID_NZ = 5.0;            // @range(1.0, 7.0, 1.0) @label Rows
+const float GRID_DX = 1.6;            // @range(1.0, 5.0, 0.1) @label X Spacing (×diam)
+const float GRID_DZ = 1.6;            // @range(1.0, 5.0, 0.1) @label Z Spacing (×diam)
+const float BASE_DIAM = 1.0;          // @range(0.5, 3.0, 0.05) @label Base Diameter
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
-const float GRID_SPACING = 2.0;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 40.0;
 const float SURF_DIST = 0.0005;
@@ -82,11 +86,14 @@ float sdBullet(vec3 p, float r, float yBase) {
 // Analytical normal for the bullet — visual chamfer via smooth normal blend
 vec3 calcBulletNormal(vec3 p, float cylId) {
     float idx = cylId - 1.0;
-    float fi = floor(idx / 3.0) - 1.0;
-    float fj = mod(idx, 3.0) - 1.0;
-    vec3 center = vec3(fi * GRID_SPACING, 0.0, fj * GRID_SPACING);
+    float r0 = CYL_RADIUS * BASE_DIAM;
+    float spX = r0 * 2.0 * GRID_DX;
+    float spZ = r0 * 2.0 * GRID_DZ;
+    float fi = floor(idx / GRID_NZ) - (GRID_NX - 1.0) * 0.5;
+    float fj = mod(idx, GRID_NZ) - (GRID_NZ - 1.0) * 0.5;
+    vec3 center = vec3(fi * spX, 0.0, fj * spZ);
 
-    float r = CYL_RADIUS * 0.85;
+    float r = r0 * 0.85;
     float yBase = BASE_HEIGHT + COLLAR_HEIGHT + 0.02;
     float shaft = r * WAX_HEIGHT;
     float slope = tan(radians(WAX_ANGLE));
@@ -140,9 +147,9 @@ vec3 sdFullLipstick(vec3 p, float r, float id) {
     return res;
 }
 
-// 9 lipstick colors — reds, pinks, berries, nudes, corals
+// 9 lipstick colors — reds, pinks, berries, nudes, corals (wraps for >9)
 vec3 lipstickColor(float id) {
-    float idx = id - 1.0;
+    float idx = mod(id - 1.0, 9.0);
     vec3 col;
     if (idx < 0.5)      col = vec3(0.72, 0.07, 0.10); // classic red
     else if (idx < 1.5) col = vec3(0.85, 0.15, 0.25); // cherry red
@@ -157,22 +164,30 @@ vec3 lipstickColor(float id) {
 }
 
 // Scene SDF. Returns vec2(distance, encodedID).
-// encodedID = material * 10 + cylinderID
+// encodedID = material * 100 + cylinderID
 // Materials: 0=ground, 1=black base, 2=gold collar, 3=lipstick tip
 vec2 mapScene(vec3 p) {
     float dGround = p.y - GROUND_Y;
     vec2 res = vec2(dGround, 0.0);
 
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            float fi = float(i) - 1.0;
-            float fj = float(j) - 1.0;
-            vec3 cp = p - vec3(fi * GRID_SPACING, 0.0, fj * GRID_SPACING);
-            float id = float(i * 3 + j) + 1.0;
-            vec3 ls = sdFullLipstick(cp, CYL_RADIUS, id);
+    float r0 = CYL_RADIUS * BASE_DIAM;
+    float spX = r0 * 2.0 * GRID_DX;
+    float spZ = r0 * 2.0 * GRID_DZ;
+    float halfNX = (GRID_NX - 1.0) * 0.5;
+    float halfNZ = (GRID_NZ - 1.0) * 0.5;
+    float id = 0.0;
+
+    for (int i = 0; i < 7; i++) {
+        if (float(i) >= GRID_NX) break;
+        for (int j = 0; j < 7; j++) {
+            if (float(j) >= GRID_NZ) break;
+            id += 1.0;
+            float fi = float(i) - halfNX;
+            float fj = float(j) - halfNZ;
+            vec3 cp = p - vec3(fi * spX, 0.0, fj * spZ);
+            vec3 ls = sdFullLipstick(cp, r0, id);
             if (ls.x < res.x) {
-                // Encode: material * 10 + cylinderID
-                res = vec2(ls.x, ls.y * 10.0 + ls.z);
+                res = vec2(ls.x, ls.y * 100.0 + ls.z);
             }
         }
     }
@@ -229,8 +244,8 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
     vec3 lightDir = normalize(LIGHT_DIR);
 
     // Decode material and cylinder ID
-    float mat = floor(encodedId / 10.0);
-    float cylId = encodedId - mat * 10.0;
+    float mat = floor(encodedId / 100.0);
+    float cylId = encodedId - mat * 100.0;
 
     vec3 baseCol;
     float specMult;
@@ -284,7 +299,7 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
 vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     vec3 directColor = shadeDirect(p, rd, n, encodedId);
 
-    float mat = floor(encodedId / 10.0);
+    float mat = floor(encodedId / 100.0);
 
     // Lipstick wax: no mirror reflection (matte/satin finish, avoids self-intersection)
     if (mat > 2.5) return directColor;
@@ -301,8 +316,8 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
-        float rMat = floor(reflHit.y / 10.0);
-        float rCylId = reflHit.y - rMat * 10.0;
+        float rMat = floor(reflHit.y / 100.0);
+        float rCylId = reflHit.y - rMat * 100.0;
         vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.001);
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y);
         // Fade grazing-angle hits to sky (they cause aliased dashed lines)
@@ -364,8 +379,8 @@ void main() {
             vec3 col;
             if (hit.x > 0.0) {
                 vec3 p = ro + rd * hit.x;
-                float hitMat = floor(hit.y / 10.0);
-                float hitCylId = hit.y - hitMat * 10.0;
+                float hitMat = floor(hit.y / 100.0);
+                float hitCylId = hit.y - hitMat * 100.0;
                 vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
                 col = shade(p, rd, n, hit.y);
             } else {
