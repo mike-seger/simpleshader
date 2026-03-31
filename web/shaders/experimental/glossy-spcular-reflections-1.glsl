@@ -24,6 +24,8 @@ const float GRID_NZ = 5.0;            // @range(1.0, 7.0, 1.0) @label Rows
 const float GRID_DX = 1.6;            // @range(1.0, 5.0, 0.1) @label X Spacing (×diam)
 const float GRID_DZ = 1.6;            // @range(1.0, 5.0, 0.1) @label Z Spacing (×diam)
 const float BASE_DIAM = 1.0;          // @range(0.5, 3.0, 0.05) @label Base Diameter
+const bool REFLECTIONS = true;
+const bool AA = false;                 // @label Anti-Aliasing (2×2)
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
@@ -175,19 +177,26 @@ vec2 mapScene(vec3 p) {
     float spZ = r0 * 2.0 * GRID_DZ;
     float halfNX = (GRID_NX - 1.0) * 0.5;
     float halfNZ = (GRID_NZ - 1.0) * 0.5;
-    float id = 0.0;
 
-    for (int i = 0; i < 7; i++) {
-        if (float(i) >= GRID_NX) break;
-        for (int j = 0; j < 7; j++) {
-            if (float(j) >= GRID_NZ) break;
-            id += 1.0;
-            float fi = float(i) - halfNX;
-            float fj = float(j) - halfNZ;
-            vec3 cp = p - vec3(fi * spX, 0.0, fj * spZ);
-            vec3 ls = sdFullLipstick(cp, r0, id);
-            if (ls.x < res.x) {
-                res = vec2(ls.x, ls.y * 100.0 + ls.z);
+    // Spatial culling: check 5×5 neighborhood around nearest grid cell
+    float ci = floor(p.x / spX + halfNX + 0.5);
+    float cj = floor(p.z / spZ + halfNZ + 0.5);
+
+    for (int di = 0; di < 5; di++) {
+        float fi_idx = ci + float(di) - 2.0;
+        if (fi_idx >= 0.0 && fi_idx < GRID_NX) {
+            for (int dj = 0; dj < 5; dj++) {
+                float fj_idx = cj + float(dj) - 2.0;
+                if (fj_idx >= 0.0 && fj_idx < GRID_NZ) {
+                    float id = fi_idx * GRID_NZ + fj_idx + 1.0;
+                    float fi = fi_idx - halfNX;
+                    float fj = fj_idx - halfNZ;
+                    vec3 cp = p - vec3(fi * spX, 0.0, fj * spZ);
+                    vec3 ls = sdFullLipstick(cp, r0, id);
+                    if (ls.x < res.x) {
+                        res = vec2(ls.x, ls.y * 100.0 + ls.z);
+                    }
+                }
             }
         }
     }
@@ -198,7 +207,7 @@ vec2 mapScene(vec3 p) {
 vec2 raymarch(vec3 ro, vec3 rd) {
     float t = 0.0;
     vec2 res = vec2(-1.0, -1.0);
-    for (int i = 0; i < 80; i++) {
+    for (int i = 0; i < 64; i++) {
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
         if (h.x < SURF_DIST) {
@@ -225,7 +234,7 @@ vec3 calcNormal(vec3 p, float eps) {
 float softShadow(vec3 ro, vec3 rd, float tMin, float tMax, float k) {
     float res = 1.0;
     float t = tMin;
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < 24; i++) {
         float h = mapScene(ro + rd * t).x;
         res = min(res, k * h / t);
         t += clamp(h, 0.02, 0.5);
@@ -304,6 +313,9 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     // Lipstick wax: no mirror reflection (matte/satin finish, avoids self-intersection)
     if (mat > 2.5) return directColor;
 
+    // Reflections toggle
+    if (!REFLECTIONS) return directColor;
+
     float reflectivity;
     if (encodedId < 0.5) reflectivity = 0.2;      // ground
     else if (mat < 1.5) reflectivity = 0.7;        // black plastic — strong but dielectric
@@ -366,11 +378,11 @@ void main() {
     vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
     vec3 up = cross(right, forward);
 
-    // 2×2 supersampling for anti-aliasing
+    // Anti-aliasing: 2×2 supersampling when AA enabled, single sample otherwise
     vec3 total = vec3(0.0);
     for (int si = 0; si < 2; si++) {
         for (int sj = 0; sj < 2; sj++) {
-            vec2 off = (vec2(float(si), float(sj)) - 0.5) * 0.5;
+            vec2 off = AA ? (vec2(float(si), float(sj)) - 0.5) * 0.5 : vec2(0.0);
             vec2 suv = (2.0 * (gl_FragCoord.xy + off) - u_resolution) / min(u_resolution.x, u_resolution.y);
             vec3 rd = normalize(forward * ZOOM + right * suv.x + up * suv.y);
 
@@ -388,9 +400,11 @@ void main() {
                 col = mix(vec3(0.12, 0.12, 0.15), vec3(0.3, 0.35, 0.45), skyT);
             }
             total += col;
+            if (!AA) break;
         }
+        if (!AA) break;
     }
-    vec3 col = total * 0.25;
+    vec3 col = total * (AA ? 0.25 : 1.0);
 
     // Vignette
     vec2 q = gl_FragCoord.xy / u_resolution;
