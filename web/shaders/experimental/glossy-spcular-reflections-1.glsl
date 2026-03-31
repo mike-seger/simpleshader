@@ -17,7 +17,7 @@ const float BASE_HEIGHT = 1.275;      // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
 const float WAX_HEIGHT = 1.35;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
 const float WAX_ANGLE = 55.5;         // @range(0.0, 75.0, 0.5) @label Cut Angle (degrees)
-const float WAX_CHAMFER = 0.04;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
+const float WAX_CHAMFER = 0.145;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
@@ -302,8 +302,13 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
         float rMat = floor(reflHit.y / 10.0);
         float rCylId = reflHit.y - rMat * 10.0;
-        vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.0005);
+        vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.001);
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y);
+        // Fade grazing-angle hits to sky (they cause aliased dashed lines)
+        float graze = abs(dot(rn, reflDir));
+        float grazeFade = smoothstep(0.0, 0.08, graze);
+        vec3 skyFall = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), 0.5 + 0.5 * reflDir.y);
+        reflColor = mix(skyFall, reflColor, grazeFade);
     } else {
         float skyT = 0.5 + 0.5 * reflDir.y;
         reflColor = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), skyT);
@@ -342,24 +347,31 @@ void main() {
     vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
     vec3 up = cross(right, forward);
 
-    vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
+    // 2×2 supersampling for anti-aliasing
+    vec3 total = vec3(0.0);
+    for (int si = 0; si < 2; si++) {
+        for (int sj = 0; sj < 2; sj++) {
+            vec2 off = (vec2(float(si), float(sj)) - 0.5) * 0.5;
+            vec2 suv = (2.0 * (gl_FragCoord.xy + off) - u_resolution) / min(u_resolution.x, u_resolution.y);
+            vec3 rd = normalize(forward * ZOOM + right * suv.x + up * suv.y);
 
-    // Raymarch primary ray
-    vec2 hit = raymarch(ro, rd);
+            vec2 hit = raymarch(ro, rd);
 
-    vec3 col;
-    if (hit.x > 0.0) {
-        vec3 p = ro + rd * hit.x;
-        float hitMat = floor(hit.y / 10.0);
-        float hitCylId = hit.y - hitMat * 10.0;
-        // Wax: analytical normal (no finite-difference artifacts)
-        vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
-        col = shade(p, rd, n, hit.y);
-    } else {
-        // Background sky gradient
-        float skyT = 0.5 + 0.5 * rd.y;
-        col = mix(vec3(0.12, 0.12, 0.15), vec3(0.3, 0.35, 0.45), skyT);
+            vec3 col;
+            if (hit.x > 0.0) {
+                vec3 p = ro + rd * hit.x;
+                float hitMat = floor(hit.y / 10.0);
+                float hitCylId = hit.y - hitMat * 10.0;
+                vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
+                col = shade(p, rd, n, hit.y);
+            } else {
+                float skyT = 0.5 + 0.5 * rd.y;
+                col = mix(vec3(0.12, 0.12, 0.15), vec3(0.3, 0.35, 0.45), skyT);
+            }
+            total += col;
+        }
     }
+    vec3 col = total * 0.25;
 
     // Vignette
     vec2 q = gl_FragCoord.xy / u_resolution;
