@@ -40,25 +40,24 @@ float sdDomeBottom(vec3 p, float r) {
     return max(length(p) - r, p.y);
 }
 
-// Lipstick bullet: cylinder cut by an oblique plane, with chamfered edge
-// The plane goes from y=0 at x=-r to y=h at x=+r, creating the classic bullet shape.
+// Lipstick bullet: straight wax shaft + oblique-cut tip, with chamfered edge
+// shaft = straight cylinder of height h, then oblique cut adds another h on top
 float sdBullet(vec3 p, float r, float yBase) {
+    float h = r * 1.35;           // height of the oblique cut portion
+    float shaft = h;              // straight shaft below the cut (100% of cut height)
     vec3 q = p - vec3(0.0, yBase, 0.0);
-
-    // Height of the tallest point above yBase
-    float h = r * 1.35;           // controls how tall the bullet is
     float chamfer = 0.12;
 
     // Infinite cylinder (radial distance only)
     float dRadial = length(q.xz) - r;
 
-    // Oblique cutting plane: y = h/2 + (x/r)*(h/2)
-    // Normal direction: (-h/(2r), 1, 0). Must normalize for true SDF.
+    // Oblique cutting plane, shifted up by shaft height
+    // At x=-r: y = shaft, at x=+r: y = shaft + h
     float halfH = h * 0.5;
     float nx = -halfH / r;
     float ny = 1.0;
     float nLen = sqrt(nx * nx + ny * ny);
-    float dOblique = (q.y - halfH - q.x * halfH / r) / nLen;
+    float dOblique = (q.y - shaft - halfH - q.x * halfH / r) / nLen;
 
     // Bottom cap at y = 0
     float dBottom = -q.y;
@@ -151,8 +150,8 @@ vec2 raymarch(vec3 ro, vec3 rd) {
 }
 
 // Compute normal via central differences
-vec3 calcNormal(vec3 p) {
-    vec2 e = vec2(0.0005, 0.0);
+vec3 calcNormal(vec3 p, float eps) {
+    vec2 e = vec2(eps, 0.0);
     return normalize(vec3(
         mapScene(p + e.xyy).x - mapScene(p - e.xyy).x,
         mapScene(p + e.yxy).x - mapScene(p - e.yxy).x,
@@ -211,10 +210,12 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
         specPow = 80.0;
     }
 
-    float NdotL = max(dot(n, lightDir), 0.0);
-    // Larger shadow bias for lipstick tip to avoid self-shadowing on oblique surface
-    float sBias = mat > 2.5 ? 0.08 : 0.01;
-    float shadow = softShadow(p + n * sBias, lightDir, 0.1, 20.0, 12.0);
+    // Wrap lighting for wax (subsurface-like); standard Lambertian for others
+    float wrap = mat > 2.5 ? 0.35 : 0.0;
+    float NdotL = max((dot(n, lightDir) + wrap) / (1.0 + wrap), 0.0);
+    // Lipstick tip: offset along light direction to skip own oblique geometry
+    vec3 sOrigin = mat > 2.5 ? p + lightDir * 1.5 : p + n * 0.01;
+    float shadow = softShadow(sOrigin, lightDir, 0.1, 20.0, 12.0);
 
     vec3 viewDir = -rd;
     vec3 halfVec = normalize(lightDir + viewDir);
@@ -236,33 +237,32 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 
     float mat = floor(encodedId / 10.0);
 
+    // Lipstick wax: no mirror reflection (matte/satin finish, avoids self-intersection)
+    if (mat > 2.5) return directColor;
+
     float reflectivity;
     if (encodedId < 0.5) reflectivity = 0.2;      // ground
     else if (mat < 1.5) reflectivity = 0.7;        // black plastic — strong but dielectric
-    else if (mat < 2.5) reflectivity = 0.85;       // gold collar — high mirror
-    else reflectivity = 0.35;                      // lipstick tip — modest gloss
+    else reflectivity = 0.85;                       // gold collar — high mirror
 
     // One-bounce mirror reflection
     vec3 reflDir = reflect(rd, n);
-    // Larger bias for lipstick tips to avoid self-intersection on oblique surface
-    float bias = mat > 2.5 ? 0.1 : 0.02;
+    float bias = 0.02;
     vec2 reflHit = raymarch(p + n * bias, reflDir);
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
-        vec3 rn = calcNormal(rp);
+        float rMat = floor(reflHit.y / 10.0);
+        vec3 rn = calcNormal(rp, rMat > 2.5 ? 0.002 : 0.0005);
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y);
     } else {
         float skyT = 0.5 + 0.5 * reflDir.y;
         reflColor = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), skyT);
     }
 
-    // Fresnel blend — dielectric F0 for plastic and lipstick, metallic for gold
+    // Fresnel blend — dielectric F0 for plastic, metallic for gold
     float NdotV = max(dot(n, -rd), 0.0);
-    float f0;
-    if (mat < 1.5 && encodedId > 0.5) f0 = 0.04;       // black plastic
-    else if (mat > 2.5) f0 = 0.04;                       // lipstick wax (dielectric)
-    else f0 = F0_CHROME;                                  // gold collar
+    float f0 = (mat < 1.5 && encodedId > 0.5) ? 0.04 : F0_CHROME;
     float fres = fresnel(NdotV, f0);
     float reflAmount;
     if (encodedId < 0.5) {
@@ -270,9 +270,6 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     } else if (mat < 1.5) {
         // Black plastic — Fresnel-driven gloss
         reflAmount = mix(0.04, 0.8, fres);
-    } else if (mat > 2.5) {
-        // Lipstick — very subtle gloss, color must dominate
-        reflAmount = mix(0.02, 0.25, fres);
     } else {
         // Gold collar — strong metallic mirror
         reflAmount = mix(reflectivity * 0.5, 1.0, fres);
@@ -304,7 +301,9 @@ void main() {
     vec3 col;
     if (hit.x > 0.0) {
         vec3 p = ro + rd * hit.x;
-        vec3 n = calcNormal(p);
+        float hitMat = floor(hit.y / 10.0);
+        // Wax: larger epsilon smooths normals at the acute chamfer edge
+        vec3 n = calcNormal(p, hitMat > 2.5 ? 0.002 : 0.0005);
         col = shade(p, rd, n, hit.y);
     } else {
         // Background sky gradient
