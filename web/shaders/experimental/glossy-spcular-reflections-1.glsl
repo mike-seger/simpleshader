@@ -7,17 +7,20 @@ uniform vec2 u_resolution;
 uniform float u_time;
 
 // @lil-gui-start
-const vec3 LIGHT_DIR = vec3(2.0, 4.0, -3.0);
+const vec3 LIGHT_DIR = vec3(-3.6, 3.0, -1.9);
 const vec3 LIGHT_COLOR = vec3(1.0, 0.98, 0.95);
 const float LIGHT_INTENSITY = 1.0;    // @range(0.0, 5.0, 0.05)
 const float LIGHT_DIFFUSION = 0.6;    // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;       // @range(0.0, 2.0, 0.05)
-const float ZOOM = 1.5;               // @range(0.5, 4.0, 0.05)
+const float ZOOM = 3.4;               // @range(0.5, 4.0, 0.05)
+const float BASE_HEIGHT = 1.275;      // @range(0.3, 3.0, 0.025)
+const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
+const float WAX_HEIGHT = 1.35;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
+const float WAX_ANGLE = 55.5;         // @range(0.0, 75.0, 0.5) @label Cut Angle (degrees)
+const float WAX_CHAMFER = 0.04;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
-const float BASE_HEIGHT = 1.275;   // black glossy base (+50%)
-const float COLLAR_HEIGHT = 0.45;  // gold metallic collar
 const float GRID_SPACING = 2.0;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 40.0;
@@ -35,56 +38,99 @@ float sdCylSection(vec3 p, float r, float yBase, float h) {
     return min(max(dR, dV), 0.0) + length(max(vec2(dR, dV), 0.0));
 }
 
+// Capped cylinder with rounded top edge (bevel radius = bev)
+float sdCylSectionRoundTop(vec3 p, float r, float yBase, float h, float bev) {
+    vec3 q = p - vec3(0.0, yBase, 0.0);
+    float dR = length(q.xz) - r;
+    float dBot = -q.y;
+    float dTop = q.y - h;
+    // Below bevel zone: standard box
+    float dBody = max(dR, max(dBot, dTop));
+    // Top-outer edge rounding
+    float dR2 = length(q.xz) - (r - bev);
+    float dTop2 = q.y - (h - bev);
+    if (dR2 > 0.0 && dTop2 > 0.0) {
+        dBody = max(dBot, length(vec2(dR2, dTop2)) - bev);
+    }
+    return dBody;
+}
+
 // Hemisphere bottom cap (lower half of sphere at y=0)
 float sdDomeBottom(vec3 p, float r) {
     return max(length(p) - r, p.y);
 }
 
-// Lipstick bullet: straight wax shaft + oblique-cut tip, with chamfered edge
-// shaft = straight cylinder of height h, then oblique cut adds another h on top
+// Lipstick bullet: straight wax shaft + oblique-cut tip
+// Clean max-intersection SDF for artifact-free raymarching.
+// Chamfer is applied visually via normal blending only (calcBulletNormal).
 float sdBullet(vec3 p, float r, float yBase) {
-    float h = r * 1.35;           // height of the oblique cut portion
-    float shaft = h;              // straight shaft below the cut (100% of cut height)
+    float shaft = r * WAX_HEIGHT;
+    float slope = tan(radians(WAX_ANGLE));
+    float rise = slope * r;
     vec3 q = p - vec3(0.0, yBase, 0.0);
-    float chamfer = 0.12;
 
-    // Infinite cylinder (radial distance only)
     float dRadial = length(q.xz) - r;
-
-    // Oblique cutting plane, shifted up by shaft height
-    // At x=-r: y = shaft, at x=+r: y = shaft + h
-    float halfH = h * 0.5;
-    float nx = -halfH / r;
-    float ny = 1.0;
-    float nLen = sqrt(nx * nx + ny * ny);
-    float dOblique = (q.y - shaft - halfH - q.x * halfH / r) / nLen;
-
-    // Bottom cap at y = 0
+    float halfRise = rise * 0.5;
+    float nLen = sqrt(halfRise * halfRise / (r * r) + 1.0);
+    float dOblique = (q.y - shaft - halfRise - q.x * halfRise / r) / nLen;
     float dBottom = -q.y;
 
-    // Chamfered intersection of cylinder wall and oblique plane
-    float a = dRadial + chamfer;
-    float b = dOblique + chamfer;
-    float d = length(max(vec2(a, b), 0.0)) - chamfer;
+    return max(max(dRadial, dOblique), dBottom);
+}
 
-    return max(d, dBottom);
+// Analytical normal for the bullet — visual chamfer via smooth normal blend
+vec3 calcBulletNormal(vec3 p, float cylId) {
+    float idx = cylId - 1.0;
+    float fi = floor(idx / 3.0) - 1.0;
+    float fj = mod(idx, 3.0) - 1.0;
+    vec3 center = vec3(fi * GRID_SPACING, 0.0, fj * GRID_SPACING);
+
+    float r = CYL_RADIUS * 0.85;
+    float yBase = BASE_HEIGHT + COLLAR_HEIGHT + 0.02;
+    float shaft = r * WAX_HEIGHT;
+    float slope = tan(radians(WAX_ANGLE));
+    float rise = slope * r;
+    float halfRise = rise * 0.5;
+
+    vec3 q = p - center - vec3(0.0, yBase, 0.0);
+
+    float dRadial = length(q.xz) - r;
+    float nLen = sqrt(halfRise * halfRise / (r * r) + 1.0);
+    float dOblique = (q.y - shaft - halfRise - q.x * halfRise / r) / nLen;
+    float dBottom = -q.y;
+
+    // Bottom cap
+    if (dBottom > max(dRadial, dOblique) + 0.001) return vec3(0.0, -1.0, 0.0);
+
+    vec3 cylN = normalize(vec3(q.x, 0.0, q.z));
+    vec3 obliqueN = vec3(-halfRise / r, 1.0, 0.0) / nLen;
+
+    // Visual chamfer: smoothstep blend between normals near the edge
+    float c = WAX_CHAMFER + 0.001; // avoid div-by-zero when chamfer=0
+    float blend = smoothstep(-c, c, dOblique - dRadial);
+    return normalize(mix(cylN, obliqueN, blend));
 }
 
 // Full lipstick: returns vec3(distance, materialID, cylinderID)
 // Materials: 1=black base, 2=gold collar, 3=lipstick tip
 vec3 sdFullLipstick(vec3 p, float r, float id) {
+    float collarR = r * 0.95;
+    float tipR = r * 0.85;
+    // Black tube wider so exposed wall = collar wall = r - tipR
+    float baseR = collarR + (r - tipR);
+    float bev = 0.04;  // top-edge bevel radius
     float collarTop = BASE_HEIGHT + COLLAR_HEIGHT;
 
-    // Black glossy base: dome bottom + cylinder
-    float dome = sdDomeBottom(p, r);
-    float baseCyl = sdCylSection(p, r, 0.0, BASE_HEIGHT);
+    // Black glossy base: dome bottom + cylinder with rounded top edge
+    float dome = sdDomeBottom(p, baseR);
+    float baseCyl = sdCylSectionRoundTop(p, baseR, 0.0, BASE_HEIGHT, bev);
     float base = min(dome, baseCyl);
 
-    // Gold metallic collar
-    float collar = sdCylSection(p, r * 0.95, BASE_HEIGHT, COLLAR_HEIGHT);
+    // Gold metallic collar with rounded top edge
+    float collar = sdCylSectionRoundTop(p, collarR, BASE_HEIGHT, COLLAR_HEIGHT, bev);
 
     // Lipstick bullet tip — slightly inset to keep clear gap from collar
-    float tip = sdBullet(p, r * 0.85, collarTop + 0.02);
+    float tip = sdBullet(p, tipR, collarTop + 0.02);
 
     // Find closest part
     vec3 res = vec3(base, 1.0, id);  // black base
@@ -200,7 +246,7 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
         specPow = 400.0;
     } else if (mat < 2.5) {
         // Gold metallic collar
-        baseCol = vec3(0.83, 0.65, 0.22);
+        baseCol = vec3(0.85, 0.70, 0.25);
         specMult = 1.2;
         specPow = 250.0;
     } else {
@@ -213,9 +259,11 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
     // Wrap lighting for wax (subsurface-like); standard Lambertian for others
     float wrap = mat > 2.5 ? 0.35 : 0.0;
     float NdotL = max((dot(n, lightDir) + wrap) / (1.0 + wrap), 0.0);
-    // Lipstick tip: offset along light direction to skip own oblique geometry
-    vec3 sOrigin = mat > 2.5 ? p + lightDir * 1.5 : p + n * 0.01;
-    float shadow = softShadow(sOrigin, lightDir, 0.1, 20.0, 12.0);
+    // Wax: skip shadow march (convex surface, self-shadow is always an artifact)
+    float shadow = 1.0;
+    if (mat < 2.5) {
+        shadow = softShadow(p + n * 0.01, lightDir, 0.1, 20.0, 12.0);
+    }
 
     vec3 viewDir = -rd;
     vec3 halfVec = normalize(lightDir + viewDir);
@@ -253,7 +301,8 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
         float rMat = floor(reflHit.y / 10.0);
-        vec3 rn = calcNormal(rp, rMat > 2.5 ? 0.002 : 0.0005);
+        float rCylId = reflHit.y - rMat * 10.0;
+        vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.0005);
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y);
     } else {
         float skyT = 0.5 + 0.5 * reflDir.y;
@@ -302,8 +351,9 @@ void main() {
     if (hit.x > 0.0) {
         vec3 p = ro + rd * hit.x;
         float hitMat = floor(hit.y / 10.0);
-        // Wax: larger epsilon smooths normals at the acute chamfer edge
-        vec3 n = calcNormal(p, hitMat > 2.5 ? 0.002 : 0.0005);
+        float hitCylId = hit.y - hitMat * 10.0;
+        // Wax: analytical normal (no finite-difference artifacts)
+        vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
         col = shade(p, rd, n, hit.y);
     } else {
         // Background sky gradient
