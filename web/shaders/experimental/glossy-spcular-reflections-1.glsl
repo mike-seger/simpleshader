@@ -16,12 +16,12 @@ const float ZOOM = 1.5;               // @range(0.5, 4.0, 0.05)
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
-const float BASE_HEIGHT = 0.85;    // black glossy base
+const float BASE_HEIGHT = 1.275;   // black glossy base (+50%)
 const float COLLAR_HEIGHT = 0.45;  // gold metallic collar
 const float GRID_SPACING = 2.0;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 40.0;
-const float SURF_DIST = 0.001;
+const float SURF_DIST = 0.0005;
 const float F0_CHROME = 0.9;
 const float SPEC_POWER = 200.0;
 
@@ -40,30 +40,33 @@ float sdDomeBottom(vec3 p, float r) {
     return max(length(p) - r, p.y);
 }
 
-// Lipstick bullet: cylinder intersected with oblique plane, with rounded edge
+// Lipstick bullet: cylinder cut by an oblique plane, with chamfered edge
+// The plane goes from y=0 at x=-r to y=h at x=+r, creating the classic bullet shape.
 float sdBullet(vec3 p, float r, float yBase) {
     vec3 q = p - vec3(0.0, yBase, 0.0);
-    float rise = 2.4 * r;
-    float chamfer = 0.12;
-    float slope = rise / (2.0 * r);
 
-    // Cylinder wall — exact SDF
+    // Height of the tallest point above yBase
+    float h = r * 1.35;           // controls how tall the bullet is
+    float chamfer = 0.12;
+
+    // Infinite cylinder (radial distance only)
     float dRadial = length(q.xz) - r;
 
-    // Oblique cut plane — MUST normalize for correct SDF
-    // Plane: q.y - rise*0.5 - q.x*slope = 0
-    // Normal: (-slope, 1, 0), length = sqrt(slope*slope + 1)
-    float nLen = sqrt(slope * slope + 1.0);
-    float dOblique = (q.y - rise * 0.5 - q.x * slope) / nLen;
+    // Oblique cutting plane: y = h/2 + (x/r)*(h/2)
+    // Normal direction: (-h/(2r), 1, 0). Must normalize for true SDF.
+    float halfH = h * 0.5;
+    float nx = -halfH / r;
+    float ny = 1.0;
+    float nLen = sqrt(nx * nx + ny * ny);
+    float dOblique = (q.y - halfH - q.x * halfH / r) / nLen;
 
-    // Bottom cap — exact SDF (half-plane)
+    // Bottom cap at y = 0
     float dBottom = -q.y;
 
-    // Smooth rounded intersection (chamfered edge) between cylinder and oblique plane
-    // Standard round-max: offset inward, take Euclidean length, offset back
-    float e1 = dRadial + chamfer;
-    float e2 = dOblique + chamfer;
-    float d = length(max(vec2(e1, e2), 0.0)) - chamfer;
+    // Chamfered intersection of cylinder wall and oblique plane
+    float a = dRadial + chamfer;
+    float b = dOblique + chamfer;
+    float d = length(max(vec2(a, b), 0.0)) - chamfer;
 
     return max(d, dBottom);
 }
@@ -81,8 +84,8 @@ vec3 sdFullLipstick(vec3 p, float r, float id) {
     // Gold metallic collar
     float collar = sdCylSection(p, r * 0.95, BASE_HEIGHT, COLLAR_HEIGHT);
 
-    // Lipstick bullet tip
-    float tip = sdBullet(p, r * 0.88, collarTop);
+    // Lipstick bullet tip — slightly inset to keep clear gap from collar
+    float tip = sdBullet(p, r * 0.85, collarTop + 0.02);
 
     // Find closest part
     vec3 res = vec3(base, 1.0, id);  // black base
@@ -149,7 +152,7 @@ vec2 raymarch(vec3 ro, vec3 rd) {
 
 // Compute normal via central differences
 vec3 calcNormal(vec3 p) {
-    vec2 e = vec2(0.001, 0.0);
+    vec2 e = vec2(0.0005, 0.0);
     return normalize(vec3(
         mapScene(p + e.xyy).x - mapScene(p - e.xyy).x,
         mapScene(p + e.yxy).x - mapScene(p - e.yxy).x,
