@@ -42,7 +42,7 @@ const float AUDIO_MAX = 1.8;                // @range(1.0, 6.0, 0.05) @label Max
 const float CYL_RADIUS = 0.448;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 200.0;
-const float SURF_DIST = 0.0005;
+const float SURF_DIST = 0.001;
 const float F0_CHROME = 0.9;
 const float SPEC_POWER = 200.0;
 // @lil-gui-end
@@ -220,31 +220,46 @@ vec3 calcCylNormal(vec3 p, float cylId, float mat) {
 
 // Full lipstick: returns vec3(distance, materialID, cylinderID)
 // Materials: 1=black base, 2=gold collar, 3=lipstick tip
+// All SDFs inlined — single length(p.xz) shared across components.
 vec3 sdFullLipstick(vec3 p, float r, float id) {
     float collarR = r * 0.95;
     float tipR = r * 0.85;
-    // Black tube wider so exposed wall = collar wall = r - tipR
     float baseR = collarR + (r - tipR);
-    float bev = 0.04;  // top-edge bevel radius
     float collarTop = BASE_HEIGHT + COLLAR_HEIGHT;
 
-    // Black glossy base: dome bottom + cylinder with rounded top edge
-    float dome = sdDomeBottom(p, baseR);
-    float baseCyl = sdCylSectionRoundTop(p, baseR, 0.0, BASE_HEIGHT, bev);
+    // Single sqrt for XZ radius — reused by all components
+    float rXZ = length(p.xz);
+
+    // Bounding cylinder early-out (skips all SDF math for far lipsticks)
+    float maxH = collarTop + tipR * 3.5;
+    float dBound = max(rXZ - baseR, max(-p.y - baseR, p.y - maxH));
+    if (dBound > 0.5) return vec3(dBound, 1.0, id);
+
+    // Dome bottom: hemisphere at origin, clamped to y <= 0
+    float dome = max(sqrt(rXZ * rXZ + p.y * p.y) - baseR, p.y);
+
+    // Base capped cylinder [0, BASE_HEIGHT] — bevel in normal only
+    float baseCyl = max(rXZ - baseR, max(-p.y, p.y - BASE_HEIGHT));
     float base = min(dome, baseCyl);
 
-    // Gold metallic collar with rounded top edge
-    // Extend 0.03 into the base to eliminate SDF junction artifacts
-    float collar = sdCylSectionRoundTop(p, collarR, BASE_HEIGHT - 0.03, COLLAR_HEIGHT + 0.03, bev);
+    // Gold collar [BASE_HEIGHT-0.03, collarTop]
+    float cy = p.y - (BASE_HEIGHT - 0.03);
+    float collar = max(rXZ - collarR, max(-cy, cy - (COLLAR_HEIGHT + 0.03)));
 
-    // Lipstick bullet tip — overlap into collar to prevent gap artifacts
+    // Bullet tip (inlined — reuses rXZ)
     float waxH = getWaxHeight(id);
-    float tip = sdBullet(p, tipR, collarTop - 0.03, waxH);
+    float shaft = tipR * waxH;
+    float slope = tan(radians(WAX_ANGLE));
+    float rise = slope * tipR;
+    float halfRise = rise * 0.5;
+    float nLen = sqrt(halfRise * halfRise / (tipR * tipR) + 1.0);
+    float qy = p.y - (collarTop - 0.03);
+    float dOblique = (qy - shaft - halfRise - p.x * halfRise / tipR) / nLen;
+    float tip = max(max(rXZ - tipR, dOblique), -qy);
 
-    // Find closest part
     // Wax gets a small bias so it wins at the collar-wax junction,
     // avoiding calcNormal crease artifacts (wax uses analytical normals).
-    vec3 res = vec3(base, 1.0, id);  // black base
+    vec3 res = vec3(base, 1.0, id);
     if (collar < res.x) res = vec3(collar, 2.0, id);
     if (tip < res.x + 0.015) res = vec3(tip, 3.0, id);
     return res;
@@ -337,7 +352,7 @@ vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
     }
 
     float tMax = res.x > 0.0 ? res.x : MAX_DIST;
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < 36; i++) {
         if (i >= maxSteps) break;
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
@@ -355,7 +370,7 @@ vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
 float softShadow(vec3 ro, vec3 rd, float tMin, float tMax, float k) {
     float res = 1.0;
     float t = tMin;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 8; i++) {
         float h = mapScene(ro + rd * t).x;
         res = min(res, k * h / t);
         t += clamp(h, 0.02, 0.5);
@@ -439,15 +454,17 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     // Reflections toggle
     if (!REFLECTIONS) return directColor;
 
+    // Ground: skip reflection march (reflectivity ~3-6%, not worth the cost)
+    if (encodedId < 0.5) return directColor;
+
     float reflectivity;
-    if (encodedId < 0.5) reflectivity = 0.2;      // ground
-    else if (mat < 1.5) reflectivity = 0.7;        // black plastic — strong but dielectric
+    if (mat < 1.5) reflectivity = 0.7;             // black plastic — strong but dielectric
     else reflectivity = 0.85;                       // gold collar — high mirror
 
     // One-bounce mirror reflection (fewer steps — reflections are approximate)
     vec3 reflDir = reflect(rd, n);
     float bias = 0.02;
-    vec2 reflHit = raymarch(p + n * bias, reflDir, 24);
+    vec2 reflHit = raymarch(p + n * bias, reflDir, 16);
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
@@ -477,12 +494,10 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 
     // Fresnel blend — dielectric F0 for plastic, metallic for gold
     float NdotV = max(dot(n, -rd), 0.0);
-    float f0 = (mat < 1.5 && encodedId > 0.5) ? 0.04 : F0_CHROME;
+    float f0 = (mat < 1.5) ? 0.04 : F0_CHROME;
     float fres = fresnel(NdotV, f0);
     float reflAmount;
-    if (encodedId < 0.5) {
-        reflAmount = reflectivity * fres * 0.3;
-    } else if (mat < 1.5) {
+    if (mat < 1.5) {
         // Black plastic — subtle gloss (keeps sheen without aliased reflected edges)
         reflAmount = mix(0.02, 0.35, fres);
     } else {
@@ -518,7 +533,7 @@ void main() {
 
     vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
 
-    vec2 hit = raymarch(ro, rd, 48);
+    vec2 hit = raymarch(ro, rd, 36);
 
     vec3 col;
     if (hit.x > 0.0) {
