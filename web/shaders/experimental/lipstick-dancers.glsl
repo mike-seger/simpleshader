@@ -15,7 +15,7 @@ const float LIGHT_INTENSITY = 0.9;          // @range(0.0, 5.0, 0.05)
 const float LIGHT_DIFFUSION = 1.5;          // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;             // @range(0.0, 2.0, 0.05)
 const float CAMERA_ANGLE = 180.0;           // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
-const float ZOOM = 2.55;                    // @range(0.5, 4.0, 0.05)
+const float ZOOM = 2.15;                    // @range(0.5, 4.0, 0.05)
 const float BASE_HEIGHT = 1.825;            // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;           // @range(0.1, 1.5, 0.025)
 const float WAX_HEIGHT = 0.5;               // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
@@ -33,9 +33,9 @@ const float AUDIO_BAND2 = 0.40;             // @range(0.0, 1.0, 0.01) @label Ban
 const float AUDIO_BAND3 = 0.60;             // @range(0.0, 1.0, 0.01) @label Band 3 Center
 const float AUDIO_BAND4 = 0.80;             // @range(0.0, 1.0, 0.01) @label Band 4 Center
 const float AUDIO_WIDTH = 0.30;             // @range(0.05, 1.0, 0.01) @label Band Width
-const float AUDIO_POWER = 2.0;              // @range(0.5, 5.0, 0.1) @label Curve Power
+const float AUDIO_POWER = 1.4;              // @range(0.5, 5.0, 0.1) @label Curve Power
 const float AUDIO_MIN = 0.6;                // @range(0.0, 3.0, 0.05) @label Min Height
-const float AUDIO_MAX = 2.55;               // @range(1.0, 6.0, 0.05) @label Max Height
+const float AUDIO_MAX = 1.8;               // @range(1.0, 6.0, 0.05) @label Max Height
 
 const float CYL_RADIUS = 0.448;
 const float GROUND_Y = 0.0;
@@ -426,10 +426,12 @@ void main() {
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.x, u_resolution.y);
 
     // Read audio frequency bands
-    freqs[0] = texture2D(u_channel0, vec2(0.01, 0.25)).x;
-    freqs[1] = texture2D(u_channel0, vec2(0.07, 0.25)).x;
-    freqs[2] = texture2D(u_channel0, vec2(0.15, 0.25)).x;
-    freqs[3] = texture2D(u_channel0, vec2(0.30, 0.25)).x;
+    // Sample 4 frequency bands across the full spectrum
+    // Low bass, mid, upper-mid, high — with progressive boost for higher bands
+    freqs[0] = texture2D(u_channel0, vec2(0.02, 0.25)).x;         // sub-bass / bass
+    freqs[1] = texture2D(u_channel0, vec2(0.12, 0.25)).x * 1.5;   // low-mid
+    freqs[2] = texture2D(u_channel0, vec2(0.35, 0.25)).x * 2.5;   // upper-mid
+    freqs[3] = texture2D(u_channel0, vec2(0.65, 0.25)).x * 4.0;   // high
 
     // Orbiting camera
     float angle = radians(CAMERA_ANGLE) + u_time * CAMERA_SPEED;
