@@ -8,15 +8,14 @@
 // Usage:
 //   vec4 rect = framedRect(0.0, 0.0, res.x, res.y, frameWidth, numX, numY);
 //   GridParams p;
-//   p.rect = rect;  p.dx = rect.z/numX;  p.dy = rect.w/numY;
+//   p.rect = rect;  p.dxy = rect.zw/vec2(numX, numY);
 //   p.lineWidth = ...; p.lineHColor = ...; ...
 //   vec4 g = drawGrid(p);   // rgb=line colour, a=mask
 //   col = mix(background, g.rgb, g.a);
 
 struct GridParams {
     vec4  rect;       // vec4(x, y, w, h) in pixel coords (origin bottom-left)
-    float dx;         // cell width in pixels
-    float dy;         // cell height in pixels
+    vec2  dxy;        // cell size in pixels (width, height)
     float lineWidth;  // line half-width as fraction of screen height
     vec3  lineHColor;
     vec3  lineVColor;
@@ -58,20 +57,15 @@ vec4 drawGrid(GridParams p) {
     if (fc.x < p.rect.x || fc.x > p.rect.x + p.rect.z ||
         fc.y < p.rect.y || fc.y > p.rect.y + p.rect.w) return vec4(0.0);
 
-    float px = fc.x - p.rect.x;
-    float py = fc.y - p.rect.y;
-
-    float fracX = fract(px / p.dx);
-    float fracY = fract(py / p.dy);
-
-    float distV = min(fracX, 1.0 - fracX) * p.dx;
-    float distH = min(fracY, 1.0 - fracY) * p.dy;
+    vec2 pos = fc - p.rect.xy;
+    vec2 frac_ = fract(pos / p.dxy);
+    vec2 dist = min(frac_, 1.0 - frac_) * p.dxy;
 
     float halfPx = p.lineWidth * u_resolution.y * 0.5;
     float lineOn = step(0.5, halfPx);   // zero mask when lineWidth is 0
 
-    float maskV = lineOn * (1.0 - smoothstep(halfPx - 1.0, halfPx + 1.0, distV));
-    float maskH = lineOn * (1.0 - smoothstep(halfPx - 1.0, halfPx + 1.0, distH));
+    float maskV = lineOn * (1.0 - smoothstep(halfPx - 1.0, halfPx + 1.0, dist.x));
+    float maskH = lineOn * (1.0 - smoothstep(halfPx - 1.0, halfPx + 1.0, dist.y));
 
     vec3 colH = maskH * p.lineHColor * p.lineHAlpha;
     vec3 colV = maskV * p.lineVColor * p.lineVAlpha;

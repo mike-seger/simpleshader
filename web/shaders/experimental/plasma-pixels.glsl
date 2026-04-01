@@ -37,8 +37,7 @@ void main() {
 
     GridParams p;
     p.rect       = rect;
-    p.dx         = rect.z / NUM_X;
-    p.dy         = rect.w / NUM_Y;
+    p.dxy        = rect.zw / vec2(NUM_X, NUM_Y);
     p.lineWidth  = GRID_LINE_W;
     p.lineHColor = GRID_LINE_H_COLOR.rgb;
     p.lineVColor = GRID_LINE_V_COLOR.rgb;
@@ -51,9 +50,8 @@ void main() {
     vec3 cells = vec3(0.0);
     if (fc.x >= rect.x && fc.x <= rect.x + rect.z &&
         fc.y >= rect.y && fc.y <= rect.y + rect.w) {
-        float cellX = floor((fc.x - rect.x) / p.dx);
-        float cellY = floor((fc.y - rect.y) / p.dy);
-        vec2 cellUV = (vec2(cellX, cellY) + 0.5) / vec2(NUM_X, NUM_Y);
+        vec2 cell = floor((fc - rect.xy) / p.dxy);
+        vec2 cellUV = (cell + 0.5) / vec2(NUM_X, NUM_Y);
         cells = texture2D(u_channel0, cellUV).rgb;
     }
 
