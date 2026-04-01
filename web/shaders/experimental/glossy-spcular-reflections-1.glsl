@@ -1,19 +1,21 @@
 precision highp float;
 
 // Lipstick — Glossy Specular Reflections
-// Raymarched 3×3 lipstick grid with mirror reflections
+// Raymarched lipstick grid with mirror reflections and audio reactivity
+
+// @iChannel0 "../../media/audio/California Sunshine - The Gate To The Past (Remix).mp3"  audio
 
 uniform vec2 u_resolution;
 uniform float u_time;
 
 // @lil-gui-start
 const vec3 LIGHT_DIR = vec3(-3.6, 3.0, -1.9);
-const vec3 LIGHT_COLOR = vec3(1.0, 0.98, 0.95);
+const vec3 LIGHT_COLOR = vec3(0.9725, 1.0, 0.7804);
 const float LIGHT_INTENSITY = 0.9;    // @range(0.0, 5.0, 0.05)
 const float LIGHT_DIFFUSION = 1.5;    // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;       // @range(0.0, 2.0, 0.05)
 const float CAMERA_ANGLE = 180.0;      // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
-const float ZOOM = 3.4;               // @range(0.5, 4.0, 0.05)
+const float ZOOM = 2.2;               // @range(0.5, 4.0, 0.05)
 const float BASE_HEIGHT = 1.275;      // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
 const float WAX_HEIGHT = 0.5;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
@@ -26,16 +28,51 @@ const float GRID_DZ = 1.6;            // @range(1.0, 5.0, 0.1) @label Z Spacing 
 const float BASE_DIAM = 1.0;          // @range(0.5, 3.0, 0.05) @label Base Diameter
 const bool REFLECTIONS = true;
 const bool AA = false;                 // @label Anti-Aliasing (2×2)
+const bool AUDIO = true;              // @label Audio Reactive Wax
 // @lil-gui-end
 
 const float CYL_RADIUS = 0.4;
 const float GROUND_Y = 0.0;
-const float MAX_DIST = 40.0;
+const float MAX_DIST = 200.0;
 const float SURF_DIST = 0.0005;
 const float F0_CHROME = 0.9;
 const float SPEC_POWER = 200.0;
 
 float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+// Blue sky gradient — horizon haze to zenith blue
+vec3 skyColor(vec3 rd) {
+    float t = max(rd.y, 0.0);
+    vec3 horizon = vec3(0.45, 0.65, 0.90);  // bright marine
+    vec3 zenith  = vec3(0.05, 0.20, 0.65);  // deep saturated blue
+    vec3 col = mix(horizon, zenith, pow(t, 0.5));
+    // Sun glow near light direction
+    vec3 sunDir = normalize(LIGHT_DIR);
+    float sun = max(dot(rd, sunDir), 0.0);
+    col += vec3(1.0, 0.9, 0.7) * pow(sun, 64.0) * 0.5;
+    col += vec3(1.0, 0.95, 0.8) * pow(sun, 8.0) * 0.15;
+    return col;
+}
+
+// Audio frequency bands (set per frame in main)
+float freqs[4];
+
+// Per-lipstick wax height driven by audio frequency bands (like cubescape)
+float audioWaxHeight(float id) {
+    float h = hash(id * 13.7);
+    float f = 0.0;
+    f += freqs[0] * clamp(1.0 - abs(h - 0.20) / 0.30, 0.0, 1.0);
+    f += freqs[1] * clamp(1.0 - abs(h - 0.40) / 0.30, 0.0, 1.0);
+    f += freqs[2] * clamp(1.0 - abs(h - 0.60) / 0.30, 0.0, 1.0);
+    f += freqs[3] * clamp(1.0 - abs(h - 0.80) / 0.30, 0.0, 1.0);
+    f = pow(clamp(f, 0.0, 1.0), 2.0);
+    return mix(0.5, 3.0, f);  // WAX_HEIGHT range: 0.5 to 3.0
+}
+
+// Effective wax height for a given lipstick ID
+float getWaxHeight(float id) {
+    return AUDIO ? audioWaxHeight(id) : WAX_HEIGHT;
+}
 
 // Capped cylinder SDF — along Y axis, between y=yBase and y=yBase+h
 float sdCylSection(vec3 p, float r, float yBase, float h) {
@@ -70,8 +107,8 @@ float sdDomeBottom(vec3 p, float r) {
 // Lipstick bullet: straight wax shaft + oblique-cut tip
 // Clean max-intersection SDF for artifact-free raymarching.
 // Chamfer is applied visually via normal blending only (calcBulletNormal).
-float sdBullet(vec3 p, float r, float yBase) {
-    float shaft = r * WAX_HEIGHT;
+float sdBullet(vec3 p, float r, float yBase, float waxH) {
+    float shaft = r * waxH;
     float slope = tan(radians(WAX_ANGLE));
     float rise = slope * r;
     vec3 q = p - vec3(0.0, yBase, 0.0);
@@ -97,7 +134,8 @@ vec3 calcBulletNormal(vec3 p, float cylId) {
 
     float r = r0 * 0.85;
     float yBase = BASE_HEIGHT + COLLAR_HEIGHT + 0.02;
-    float shaft = r * WAX_HEIGHT;
+    float waxH = getWaxHeight(cylId);
+    float shaft = r * waxH;
     float slope = tan(radians(WAX_ANGLE));
     float rise = slope * r;
     float halfRise = rise * 0.5;
@@ -140,7 +178,8 @@ vec3 sdFullLipstick(vec3 p, float r, float id) {
     float collar = sdCylSectionRoundTop(p, collarR, BASE_HEIGHT, COLLAR_HEIGHT, bev);
 
     // Lipstick bullet tip — slightly inset to keep clear gap from collar
-    float tip = sdBullet(p, tipR, collarTop + 0.02);
+    float waxH = getWaxHeight(id);
+    float tip = sdBullet(p, tipR, collarTop + 0.02, waxH);
 
     // Find closest part
     vec3 res = vec3(base, 1.0, id);  // black base
@@ -207,6 +246,16 @@ vec2 mapScene(vec3 p) {
 vec2 raymarch(vec3 ro, vec3 rd) {
     float t = 0.0;
     vec2 res = vec2(-1.0, -1.0);
+
+    // Analytical ground plane intersection — guarantees floor hit at any distance
+    if (rd.y < -0.0001) {
+        float tGround = (ro.y - GROUND_Y) / (-rd.y);
+        if (tGround > 0.0) {
+            res = vec2(tGround, 0.0);  // ground material = 0
+        }
+    }
+
+    float tMax = res.x > 0.0 ? res.x : MAX_DIST;
     for (int i = 0; i < 64; i++) {
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
@@ -215,7 +264,7 @@ vec2 raymarch(vec3 ro, vec3 rd) {
             break;
         }
         t += h.x;
-        if (t > MAX_DIST) break;
+        if (t > tMax) break;
     }
     return res;
 }
@@ -335,14 +384,13 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
         // Fade grazing-angle hits to sky (they cause aliased dashed lines)
         float graze = abs(dot(rn, reflDir));
         float grazeFade = smoothstep(0.0, 0.08, graze);
-        vec3 skyFall = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), 0.5 + 0.5 * reflDir.y);
+        vec3 skyFall = skyColor(reflDir);
         reflColor = mix(skyFall, reflColor, grazeFade);
         // Distance fade — far reflections blur to sky (reduces aliased edges)
         float distFade = 1.0 - smoothstep(2.0, 8.0, reflHit.x);
         reflColor = mix(skyFall, reflColor, distFade);
     } else {
-        float skyT = 0.5 + 0.5 * reflDir.y;
-        reflColor = mix(vec3(0.15, 0.15, 0.18), vec3(0.4, 0.45, 0.55), skyT);
+        reflColor = skyColor(reflDir);
     }
 
     // Fresnel blend — dielectric F0 for plastic, metallic for gold
@@ -365,6 +413,12 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 
 void main() {
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.x, u_resolution.y);
+
+    // Read audio frequency bands
+    freqs[0] = texture2D(u_channel0, vec2(0.01, 0.25)).x;
+    freqs[1] = texture2D(u_channel0, vec2(0.07, 0.25)).x;
+    freqs[2] = texture2D(u_channel0, vec2(0.15, 0.25)).x;
+    freqs[3] = texture2D(u_channel0, vec2(0.30, 0.25)).x;
 
     // Orbiting camera
     float angle = radians(CAMERA_ANGLE) + u_time * CAMERA_SPEED;
@@ -396,8 +450,7 @@ void main() {
                 vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
                 col = shade(p, rd, n, hit.y);
             } else {
-                float skyT = 0.5 + 0.5 * rd.y;
-                col = mix(vec3(0.12, 0.12, 0.15), vec3(0.3, 0.35, 0.45), skyT);
+                col = skyColor(rd);
             }
             total += col;
             if (!AA) break;
