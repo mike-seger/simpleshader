@@ -3,9 +3,7 @@ precision highp float;
 // Lipstick — Glossy Specular Reflections
 // Raymarched lipstick grid with mirror reflections and audio reactivity
 
-// Maximum render resolution — pixels beyond this are discarded.
-// Set to 0.0 to disable the cap (use full canvas resolution).
-#define MAX_RES 1920
+
 
 // @iChannel0 "../../media/audio/01 - Perpetual Overload.mp3"  audio
 
@@ -261,7 +259,7 @@ vec2 mapScene(vec3 p) {
 }
 
 // Raymarch the scene. Returns vec2(distance, materialID).
-vec2 raymarch(vec3 ro, vec3 rd) {
+vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
     float t = 0.0;
     vec2 res = vec2(-1.0, -1.0);
 
@@ -275,6 +273,7 @@ vec2 raymarch(vec3 ro, vec3 rd) {
 
     float tMax = res.x > 0.0 ? res.x : MAX_DIST;
     for (int i = 0; i < 64; i++) {
+        if (i >= maxSteps) break;
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
         if (h.x < SURF_DIST) {
@@ -287,14 +286,15 @@ vec2 raymarch(vec3 ro, vec3 rd) {
     return res;
 }
 
-// Compute normal via central differences
+// Compute normal via tetrahedron technique (4 samples instead of 6)
 vec3 calcNormal(vec3 p, float eps) {
-    vec2 e = vec2(eps, 0.0);
-    return normalize(vec3(
-        mapScene(p + e.xyy).x - mapScene(p - e.xyy).x,
-        mapScene(p + e.yxy).x - mapScene(p - e.yxy).x,
-        mapScene(p + e.yyx).x - mapScene(p - e.yyx).x
-    ));
+    vec2 e = vec2(1.0, -1.0) * eps;
+    return normalize(
+        e.xyy * mapScene(p + e.xyy).x +
+        e.yyx * mapScene(p + e.yyx).x +
+        e.yxy * mapScene(p + e.yxy).x +
+        e.xxx * mapScene(p + e.xxx).x
+    );
 }
 
 // Soft shadow — march from point toward light
@@ -316,7 +316,8 @@ float fresnel(float cosTheta, float f0) {
 }
 
 // Shade a surface hit — direct lighting only (used for reflection bounces too)
-vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
+// When isReflection=true, skip shadow march for cheaper reflection shading.
+vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId, bool isReflection) {
     vec3 lightDir = normalize(LIGHT_DIR);
 
     // Decode material and cylinder ID
@@ -352,8 +353,9 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
     float wrap = mat > 2.5 ? 0.35 : 0.0;
     float NdotL = max((dot(n, lightDir) + wrap) / (1.0 + wrap), 0.0);
     // Wax: skip shadow march (convex surface, self-shadow is always an artifact)
+    // Reflections: skip shadow for performance (approximate is fine)
     float shadow = 1.0;
-    if (mat < 2.5) {
+    if (mat < 2.5 && !isReflection) {
         shadow = softShadow(p + n * 0.01, lightDir, 0.1, 20.0, 12.0);
     }
 
@@ -373,7 +375,7 @@ vec3 shadeDirect(vec3 p, vec3 rd, vec3 n, float encodedId) {
 
 // Full shade with one-bounce mirror reflection
 vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
-    vec3 directColor = shadeDirect(p, rd, n, encodedId);
+    vec3 directColor = shadeDirect(p, rd, n, encodedId, false);
 
     float mat = floor(encodedId / 100.0);
 
@@ -388,17 +390,17 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     else if (mat < 1.5) reflectivity = 0.7;        // black plastic — strong but dielectric
     else reflectivity = 0.85;                       // gold collar — high mirror
 
-    // One-bounce mirror reflection
+    // One-bounce mirror reflection (fewer steps — reflections are approximate)
     vec3 reflDir = reflect(rd, n);
     float bias = 0.02;
-    vec2 reflHit = raymarch(p + n * bias, reflDir);
+    vec2 reflHit = raymarch(p + n * bias, reflDir, 32);
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
         float rMat = floor(reflHit.y / 100.0);
         float rCylId = reflHit.y - rMat * 100.0;
         vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.001);
-        reflColor = shadeDirect(rp, reflDir, rn, reflHit.y);
+        reflColor = shadeDirect(rp, reflDir, rn, reflHit.y, true);
         // Fade grazing-angle hits to sky (they cause aliased dashed lines)
         float graze = abs(dot(rn, reflDir));
         float grazeFade = smoothstep(0.0, 0.08, graze);
@@ -430,16 +432,7 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 }
 
 void main() {
-    // Resolution cap: snap fragment coordinates to a coarser grid so
-    // neighboring pixels share the same ray (pixelated look, less work
-    // on GPUs that can skip redundant fragment shading).
-    vec2 fc = gl_FragCoord.xy;
-    #if MAX_RES > 0
-    float pixSize = max(1.0, ceil(u_resolution.x / float(MAX_RES)));
-    fc = floor(fc / pixSize) * pixSize + pixSize * 0.5;
-    #endif
-
-    vec2 uv = (2.0 * fc - u_resolution) / min(u_resolution.x, u_resolution.y);
+    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.x, u_resolution.y);
 
     // Read audio frequency bands
     // Sample 4 frequency bands across the full spectrum
@@ -463,7 +456,7 @@ void main() {
 
     vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
 
-    vec2 hit = raymarch(ro, rd);
+    vec2 hit = raymarch(ro, rd, 64);
 
     vec3 col;
     if (hit.x > 0.0) {
@@ -477,7 +470,7 @@ void main() {
     }
 
     // Vignette
-    vec2 q = fc / u_resolution;
+    vec2 q = gl_FragCoord.xy / u_resolution;
     float vig = 1.0 - 0.3 * dot((q - 0.5) * 1.5, (q - 0.5) * 1.5);
     col *= vig;
 
