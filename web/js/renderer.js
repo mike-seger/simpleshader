@@ -403,8 +403,8 @@ export default class Renderer {
     if (this._uResolution !== null)  gl.uniform2f(this._uResolution, w, h);
     if (this.mediaLoader?.hasMedia) {
       this.mediaLoader.updateAudio();
-      this.mediaLoader.bind(0);
-      this.mediaLoader.setUniforms(this._program, 0);
+      this.mediaLoader.bind(gl, 0);
+      this.mediaLoader.setUniforms(gl, this._program, 0);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -452,8 +452,8 @@ export default class Renderer {
 
       // Bind media channels (offset past pass channels)
       if (this.mediaLoader?.hasMedia) {
-        this.mediaLoader.bind(i);
-        this.mediaLoader.setUniforms(pass.prog, i);
+        this.mediaLoader.bind(gl, i);
+        this.mediaLoader.setUniforms(gl, pass.prog, i);
       }
 
       // Configure the vertex attribute for this program

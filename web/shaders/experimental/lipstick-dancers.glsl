@@ -301,7 +301,7 @@ vec3 calcNormal(vec3 p, float eps) {
 float softShadow(vec3 ro, vec3 rd, float tMin, float tMax, float k) {
     float res = 1.0;
     float t = tMin;
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < 16; i++) {
         float h = mapScene(ro + rd * t).x;
         res = min(res, k * h / t);
         t += clamp(h, 0.02, 0.5);
@@ -399,7 +399,15 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
         float rMat = floor(reflHit.y / 100.0);
         float rCylId = reflHit.y - rMat * 100.0;
-        vec3 rn = rMat > 2.5 ? calcBulletNormal(rp, rCylId) : calcNormal(rp, 0.001);
+        // Ground normal is trivially (0,1,0)
+        vec3 rn;
+        if (reflHit.y < 0.5) {
+            rn = vec3(0.0, 1.0, 0.0);
+        } else if (rMat > 2.5) {
+            rn = calcBulletNormal(rp, rCylId);
+        } else {
+            rn = calcNormal(rp, 0.001);
+        }
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y, true);
         // Fade grazing-angle hits to sky (they cause aliased dashed lines)
         float graze = abs(dot(rn, reflDir));
@@ -463,7 +471,15 @@ void main() {
         vec3 p = ro + rd * hit.x;
         float hitMat = floor(hit.y / 100.0);
         float hitCylId = hit.y - hitMat * 100.0;
-        vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
+        // Ground normal is trivially (0,1,0); skip expensive calcNormal
+        vec3 n;
+        if (hit.y < 0.5) {
+            n = vec3(0.0, 1.0, 0.0);
+        } else if (hitMat > 2.5) {
+            n = calcBulletNormal(p, hitCylId);
+        } else {
+            n = calcNormal(p, 0.0005);
+        }
         col = shade(p, rd, n, hit.y);
     } else {
         col = skyColor(rd);

@@ -83,7 +83,7 @@ function buildAudioConfig() {
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
-const mediaLoader = new MediaLoader(renderer.gl);
+const mediaLoader = new MediaLoader();
 renderer.mediaLoader = mediaLoader;
 function fpsHandler(fps) {
   fpsDisplay.textContent = fps + " FPS";
@@ -110,12 +110,12 @@ renderer.start();
 renderer.togglePause();
 btnPlayPause.textContent = "play_arrow";
 
-// Resume AudioContext on first user interaction (autoplay policy)
+// Resume AudioContext on user interaction (autoplay policy)
 document.addEventListener("click", () => {
   if (mediaLoader._audioCtx && mediaLoader._audioCtx.state === 'suspended') {
     mediaLoader._audioCtx.resume();
   }
-}, { once: true });
+});
 
 // Update toolbar time + slider at 10 Hz
 function formatToolbarTime(t) {

@@ -31,24 +31,25 @@ export function parseMediaAnnotations(src) {
 
 /**
  * Manages loading media into WebGL textures and updating audio FFT each frame.
+ * Supports multiple GL contexts (e.g. main canvas + pop-out window) by lazily
+ * creating per-context textures via a WeakMap keyed on the GL context.
  */
 export class MediaLoader {
-  /** @param {WebGLRenderingContext} gl */
-  constructor(gl) {
-    this.gl = gl;
-    /** @type {Map<number, {tex: WebGLTexture, type: string, update?: Function}>} */
+  constructor() {
+    /** @type {Map<number, {type: string, analyser?: AnalyserNode, freqData?: Uint8Array, waveData?: Uint8Array, texData?: Uint8Array, img?: HTMLImageElement}>} */
     this.channels = new Map();
     this._audioCtx = null;
     this._audioElements = [];
+    /** @type {WeakMap<WebGLRenderingContext, Map<number, WebGLTexture>>} */
+    this._textures = new WeakMap();
   }
 
   /** Remove all loaded channels and free GL/audio resources. */
   dispose() {
-    const gl = this.gl;
-    for (const ch of this.channels.values()) {
-      gl.deleteTexture(ch.tex);
-    }
     this.channels.clear();
+    // Note: per-context textures are not explicitly deleted — they will be
+    // garbage-collected when their GL context is lost (e.g. pop-out closed).
+    this._textures = new WeakMap();
     for (const el of this._audioElements) {
       el.pause();
       el.src = '';
@@ -74,9 +75,8 @@ export class MediaLoader {
     }));
   }
 
-  /** Load an image into a texture on the given channel. */
+  /** Load an image into a channel (stores the Image for per-context texture creation). */
   async _loadImage(channel, url) {
-    const gl = this.gl;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     await new Promise((resolve, reject) => {
@@ -84,23 +84,11 @@ export class MediaLoader {
       img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
       img.src = url;
     });
-
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-
-    this.channels.set(channel, { tex, type: 'image' });
+    this.channels.set(channel, { type: 'image', img });
   }
 
-  /** Load audio, create FFT analyser, and produce a 256×2 FFT texture. */
+  /** Load audio, create FFT analyser, and store channel data for per-context textures. */
   async _loadAudio(channel, url) {
-    const gl = this.gl;
-
     if (!this._audioCtx) {
       this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -122,59 +110,86 @@ export class MediaLoader {
     const waveData = new Uint8Array(256);
     const texData  = new Uint8Array(256 * 2);
 
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 256, 2, 0,
-                  gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-
     // Don't auto-play — wait for user gesture via play button
-    // try { await audio.play(); } catch (_) { /* user gesture required — deferred */ }
 
-    const update = () => {
-      analyser.getByteFrequencyData(freqData);
-      analyser.getByteTimeDomainData(waveData);
-      texData.set(freqData, 0);
-      texData.set(waveData, 256);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 2,
-                       gl.LUMINANCE, gl.UNSIGNED_BYTE, texData);
-    };
-
-    this.channels.set(channel, { tex, type: 'audio', update });
+    this.channels.set(channel, { type: 'audio', analyser, freqData, waveData, texData });
   }
 
-  /** Call once per frame to update any audio FFT textures. */
+  /** Call once per frame to capture audio FFT data (no GL operations). */
   updateAudio() {
     for (const ch of this.channels.values()) {
-      if (ch.update) ch.update();
+      if (ch.type === 'audio' && ch.analyser) {
+        ch.analyser.getByteFrequencyData(ch.freqData);
+        ch.analyser.getByteTimeDomainData(ch.waveData);
+        ch.texData.set(ch.freqData, 0);
+        ch.texData.set(ch.waveData, 256);
+      }
     }
   }
 
   /**
-   * Bind loaded media textures to GL texture units.
-   * @param {number} startUnit  First texture unit to use (e.g. 0 for single-pass)
+   * Get or lazily create a texture for the given GL context and channel.
+   * @param {WebGLRenderingContext} gl
+   * @param {number} channel
+   * @returns {WebGLTexture}
    */
-  bind(startUnit) {
-    const gl = this.gl;
+  _getTexture(gl, channel) {
+    let ctxMap = this._textures.get(gl);
+    if (!ctxMap) {
+      ctxMap = new Map();
+      this._textures.set(gl, ctxMap);
+    }
+    let tex = ctxMap.get(channel);
+    if (!tex) {
+      const ch = this.channels.get(channel);
+      tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      if (ch.type === 'audio') {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 256, 2, 0,
+                      gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      } else if (ch.type === 'image' && ch.img) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ch.img);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      }
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      ctxMap.set(channel, tex);
+    }
+    return tex;
+  }
+
+  /**
+   * Upload audio FFT data and bind textures to GL texture units.
+   * @param {WebGLRenderingContext} gl  The active GL context
+   * @param {number} startUnit  First texture unit to use
+   */
+  bind(gl, startUnit) {
     for (const [channel, ch] of this.channels) {
       const unit = startUnit + channel;
       gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(gl.TEXTURE_2D, ch.tex);
+      const tex = this._getTexture(gl, channel);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      // Upload latest FFT data for audio channels
+      if (ch.type === 'audio' && ch.texData) {
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 2,
+                         gl.LUMINANCE, gl.UNSIGNED_BYTE, ch.texData);
+      }
     }
   }
 
   /**
    * Set sampler uniform values for loaded channels.
+   * @param {WebGLRenderingContext} gl
    * @param {WebGLProgram} prog
    * @param {number} startUnit
    */
-  setUniforms(prog, startUnit) {
-    const gl = this.gl;
+  setUniforms(gl, prog, startUnit) {
     for (const [channel] of this.channels) {
       const loc = gl.getUniformLocation(prog, `u_channel${channel}`);
       if (loc !== null) {
