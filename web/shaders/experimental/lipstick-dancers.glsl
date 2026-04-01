@@ -148,7 +148,7 @@ vec3 calcBulletNormal(vec3 p, float cylId) {
     vec3 center = vec3(fi * spX, 0.0, fj * spZ);
 
     float r = r0 * 0.85;
-    float yBase = BASE_HEIGHT + COLLAR_HEIGHT + 0.02;
+    float yBase = BASE_HEIGHT + COLLAR_HEIGHT - 0.03;
     float waxH = getWaxHeight(cylId);
     float shaft = r * waxH;
     float slope = tan(radians(WAX_ANGLE));
@@ -190,16 +190,19 @@ vec3 sdFullLipstick(vec3 p, float r, float id) {
     float base = min(dome, baseCyl);
 
     // Gold metallic collar with rounded top edge
-    float collar = sdCylSectionRoundTop(p, collarR, BASE_HEIGHT, COLLAR_HEIGHT, bev);
+    // Extend 0.03 into the base to eliminate SDF junction artifacts
+    float collar = sdCylSectionRoundTop(p, collarR, BASE_HEIGHT - 0.03, COLLAR_HEIGHT + 0.03, bev);
 
-    // Lipstick bullet tip — slightly inset to keep clear gap from collar
+    // Lipstick bullet tip — overlap into collar to prevent gap artifacts
     float waxH = getWaxHeight(id);
-    float tip = sdBullet(p, tipR, collarTop + 0.02, waxH);
+    float tip = sdBullet(p, tipR, collarTop - 0.03, waxH);
 
     // Find closest part
+    // Wax gets a small bias so it wins at the collar-wax junction,
+    // avoiding calcNormal crease artifacts (wax uses analytical normals).
     vec3 res = vec3(base, 1.0, id);  // black base
     if (collar < res.x) res = vec3(collar, 2.0, id);
-    if (tip < res.x) res = vec3(tip, 3.0, id);
+    if (tip < res.x + 0.015) res = vec3(tip, 3.0, id);
     return res;
 }
 
@@ -427,20 +430,16 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 }
 
 void main() {
-    // Resolution cap: remap coordinates so the shader runs as if the
-    // viewport were MAX_RES wide.  Every pixel still gets shaded, but
-    // the effective detail matches a smaller framebuffer.
-    vec2 res = u_resolution;
-    vec2 fc  = gl_FragCoord.xy;
+    // Resolution cap: snap fragment coordinates to a coarser grid so
+    // neighboring pixels share the same ray (pixelated look, less work
+    // on GPUs that can skip redundant fragment shading).
+    vec2 fc = gl_FragCoord.xy;
     #if MAX_RES > 0
-    if (res.x > float(MAX_RES)) {
-        float scale = float(MAX_RES) / res.x;
-        fc  *= scale;
-        res *= scale;
-    }
+    float pixSize = max(1.0, ceil(u_resolution.x / float(MAX_RES)));
+    fc = floor(fc / pixSize) * pixSize + pixSize * 0.5;
     #endif
 
-    vec2 uv = (2.0 * fc - res) / min(res.x, res.y);
+    vec2 uv = (2.0 * fc - u_resolution) / min(u_resolution.x, u_resolution.y);
 
     // Read audio frequency bands
     // Sample 4 frequency bands across the full spectrum
@@ -478,7 +477,7 @@ void main() {
     }
 
     // Vignette
-    vec2 q = fc / res;
+    vec2 q = fc / u_resolution;
     float vig = 1.0 - 0.3 * dot((q - 0.5) * 1.5, (q - 0.5) * 1.5);
     col *= vig;
 
