@@ -172,6 +172,52 @@ vec3 calcBulletNormal(vec3 p, float cylId) {
     return normalize(mix(cylN, obliqueN, blend));
 }
 
+// Analytical normal for base and collar cylinders (avoids 4× mapScene calls)
+vec3 calcCylNormal(vec3 p, float cylId, float mat) {
+    float idx = cylId - 1.0;
+    float r0 = CYL_RADIUS * BASE_DIAM;
+    float spX = r0 * 2.0 * GRID_DX;
+    float spZ = r0 * 2.0 * GRID_DZ;
+    float fi = floor(idx / GRID_NZ) - (GRID_NX - 1.0) * 0.5;
+    float fj = mod(idx, GRID_NZ) - (GRID_NZ - 1.0) * 0.5;
+    vec3 lp = p - vec3(fi * spX, 0.0, fj * spZ);
+    float bev = 0.04;
+    if (mat < 1.5) {
+        // Black base
+        float collarR = r0 * 0.95;
+        float tipR = r0 * 0.85;
+        float r = collarR + (r0 - tipR);
+        // Dome bottom (hemisphere below y=0)
+        if (lp.y < 0.0) return normalize(lp);
+        // Cylinder body
+        float dR2 = length(lp.xz) - (r - bev);
+        float dTop2 = lp.y - (BASE_HEIGHT - bev);
+        if (dR2 > 0.0 && dTop2 > 0.0) {
+            // Rounded top edge
+            vec2 bv = normalize(vec2(dR2, dTop2));
+            return normalize(normalize(vec3(lp.x, 0.0, lp.z)) * bv.x + vec3(0.0, bv.y, 0.0));
+        }
+        if (lp.y - BASE_HEIGHT > length(lp.xz) - r) return vec3(0.0, 1.0, 0.0);
+        return normalize(vec3(lp.x, 0.0, lp.z));
+    } else {
+        // Gold collar
+        float r = r0 * 0.95;
+        float yBase = BASE_HEIGHT - 0.03;
+        float h = COLLAR_HEIGHT + 0.03;
+        vec3 q = lp - vec3(0.0, yBase, 0.0);
+        float dR2 = length(q.xz) - (r - bev);
+        float dTop2 = q.y - (h - bev);
+        if (dR2 > 0.0 && dTop2 > 0.0) {
+            vec2 bv = normalize(vec2(dR2, dTop2));
+            return normalize(normalize(vec3(q.x, 0.0, q.z)) * bv.x + vec3(0.0, bv.y, 0.0));
+        }
+        float dR = length(q.xz) - r;
+        if (q.y - h > dR) return vec3(0.0, 1.0, 0.0);
+        if (-q.y > dR) return vec3(0.0, -1.0, 0.0);
+        return normalize(vec3(q.x, 0.0, q.z));
+    }
+}
+
 // Full lipstick: returns vec3(distance, materialID, cylinderID)
 // Materials: 1=black base, 2=gold collar, 3=lipstick tip
 vec3 sdFullLipstick(vec3 p, float r, float id) {
@@ -232,6 +278,7 @@ vec2 mapScene(vec3 p) {
     float spZ = r0 * 2.0 * GRID_DZ;
     float halfNX = (GRID_NX - 1.0) * 0.5;
     float halfNZ = (GRID_NZ - 1.0) * 0.5;
+    float maxR = r0 * 1.1;  // baseR is the widest part
 
     // Spatial culling: check 5×5 neighborhood around nearest grid cell
     float ci = floor(p.x / spX + halfNX + 0.5);
@@ -243,13 +290,16 @@ vec2 mapScene(vec3 p) {
             for (int dj = 0; dj < 5; dj++) {
                 float fj_idx = cj + float(dj) - 2.0;
                 if (fj_idx >= 0.0 && fj_idx < GRID_NZ) {
-                    float id = fi_idx * GRID_NZ + fj_idx + 1.0;
                     float fi = fi_idx - halfNX;
                     float fj = fj_idx - halfNZ;
                     vec3 cp = p - vec3(fi * spX, 0.0, fj * spZ);
-                    vec3 ls = sdFullLipstick(cp, r0, id);
-                    if (ls.x < res.x) {
-                        res = vec2(ls.x, ls.y * 100.0 + ls.z);
+                    // 2D pre-cull: radial distance is a lower bound on 3D SDF
+                    if (length(cp.xz) <= res.x + maxR) {
+                        float id = fi_idx * GRID_NZ + fj_idx + 1.0;
+                        vec3 ls = sdFullLipstick(cp, r0, id);
+                        if (ls.x < res.x) {
+                            res = vec2(ls.x, ls.y * 100.0 + ls.z);
+                        }
                     }
                 }
             }
@@ -271,8 +321,23 @@ vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
         }
     }
 
+    // Skip empty space: intersect ray with scene bounding sphere
+    vec3 sc = vec3(0.0, 2.0, 0.0);
+    float sr = 6.0;
+    vec3 oc = ro - sc;
+    float ob = dot(oc, rd);
+    float oc2 = dot(oc, oc) - sr * sr;
+    float disc = ob * ob - oc2;
+    if (disc > 0.0) {
+        float t0 = -ob - sqrt(disc);
+        if (t0 > 0.0) t = t0;
+    } else if (res.x < 0.0) {
+        // Ray misses scene entirely — only ground can be hit
+        return res;
+    }
+
     float tMax = res.x > 0.0 ? res.x : MAX_DIST;
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 48; i++) {
         if (i >= maxSteps) break;
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
@@ -286,22 +351,11 @@ vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
     return res;
 }
 
-// Compute normal via tetrahedron technique (4 samples instead of 6)
-vec3 calcNormal(vec3 p, float eps) {
-    vec2 e = vec2(1.0, -1.0) * eps;
-    return normalize(
-        e.xyy * mapScene(p + e.xyy).x +
-        e.yyx * mapScene(p + e.yyx).x +
-        e.yxy * mapScene(p + e.yxy).x +
-        e.xxx * mapScene(p + e.xxx).x
-    );
-}
-
 // Soft shadow — march from point toward light
 float softShadow(vec3 ro, vec3 rd, float tMin, float tMax, float k) {
     float res = 1.0;
     float t = tMin;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 12; i++) {
         float h = mapScene(ro + rd * t).x;
         res = min(res, k * h / t);
         t += clamp(h, 0.02, 0.5);
@@ -393,20 +447,20 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     // One-bounce mirror reflection (fewer steps — reflections are approximate)
     vec3 reflDir = reflect(rd, n);
     float bias = 0.02;
-    vec2 reflHit = raymarch(p + n * bias, reflDir, 32);
+    vec2 reflHit = raymarch(p + n * bias, reflDir, 24);
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
         float rMat = floor(reflHit.y / 100.0);
         float rCylId = reflHit.y - rMat * 100.0;
-        // Ground normal is trivially (0,1,0)
+        // Analytical normals — no mapScene calls needed
         vec3 rn;
         if (reflHit.y < 0.5) {
             rn = vec3(0.0, 1.0, 0.0);
         } else if (rMat > 2.5) {
             rn = calcBulletNormal(rp, rCylId);
         } else {
-            rn = calcNormal(rp, 0.001);
+            rn = calcCylNormal(rp, rCylId, rMat);
         }
         reflColor = shadeDirect(rp, reflDir, rn, reflHit.y, true);
         // Fade grazing-angle hits to sky (they cause aliased dashed lines)
@@ -464,21 +518,21 @@ void main() {
 
     vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
 
-    vec2 hit = raymarch(ro, rd, 64);
+    vec2 hit = raymarch(ro, rd, 48);
 
     vec3 col;
     if (hit.x > 0.0) {
         vec3 p = ro + rd * hit.x;
         float hitMat = floor(hit.y / 100.0);
         float hitCylId = hit.y - hitMat * 100.0;
-        // Ground normal is trivially (0,1,0); skip expensive calcNormal
+        // Analytical normals — no mapScene calls needed
         vec3 n;
         if (hit.y < 0.5) {
             n = vec3(0.0, 1.0, 0.0);
         } else if (hitMat > 2.5) {
             n = calcBulletNormal(p, hitCylId);
         } else {
-            n = calcNormal(p, 0.0005);
+            n = calcCylNormal(p, hitCylId, hitMat);
         }
         col = shade(p, rd, n, hit.y);
     } else {
