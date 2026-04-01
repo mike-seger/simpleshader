@@ -56,6 +56,11 @@
         <button id="btn-reset-time" class="tb-icon" title="Reset to 0:00">skip_previous</button>
         <input id="time-slider" type="range" min="0" max="600" step="0.1" value="0" title="Scrub u_time">
         <span id="toolbar-time">00:00</span>
+        <div id="audio-controls" class="hidden">
+          <button id="btn-audio-playpause" class="tb-icon" title="Play / Pause audio">play_arrow</button>
+          <input id="audio-slider" type="range" min="0" max="100" step="0.1" value="0" title="Audio position">
+          <span id="audio-time">00:00</span>
+        </div>
       </div>
       <div id="editor-container"></div>
     </section>

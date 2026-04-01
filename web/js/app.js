@@ -34,6 +34,10 @@ const tunerContainer = document.getElementById("tuner-container");
 const timeSlider    = document.getElementById("time-slider");
 const toolbarTime   = document.getElementById("toolbar-time");
 const btnResetTime  = document.getElementById("btn-reset-time");
+const audioControls    = document.getElementById("audio-controls");
+const btnAudioPlayPause = document.getElementById("btn-audio-playpause");
+const audioSlider      = document.getElementById("audio-slider");
+const audioTimeEl      = document.getElementById("audio-time");
 
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
@@ -46,6 +50,36 @@ let debugVisible = false; // debug overlay state
 const SLIDER_INIT_MAX = 600;  // 10 minutes initial range
 const SLIDER_EXTEND   = 600;  // extend by 10 minutes when reached
 let sliderDragging = false;
+let audioSliderDragging = false;
+
+// ── Available audio tracks ────────────────────────────────
+const AUDIO_TRACKS = [
+  "01 - Perpetual Overload.mp3",
+  "06 - 3 Body Problem.mp3",
+  "08 - Industrial Dreams.mp3",
+  "12 - Between The Worlds.mp3",
+  "17 - Neural Networks.mp3",
+  "18 - Sounds Of Infinity.mp3",
+];
+const AUDIO_BASE_PATH = "web/media/audio/";
+
+/** Build audio track config for the shader tuner panel. */
+function buildAudioConfig() {
+  if (!mediaLoader.hasAudio) return null;
+  // Find current track from the audio element's src
+  const state = mediaLoader.getAudioState();
+  const audioEl = mediaLoader._audioElements[0];
+  const currentSrc = audioEl ? audioEl.src : "";
+  const tracks = AUDIO_TRACKS.map(f => ({
+    label: f.replace(/\.mp3$/i, ""),
+    url: new URL(AUDIO_BASE_PATH + f, window.location.href).href,
+  }));
+  return {
+    tracks,
+    currentUrl: currentSrc,
+    onSwitch: (url) => mediaLoader.switchAudioSource(url),
+  };
+}
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
@@ -72,9 +106,16 @@ function fpsHandler(fps) {
 }
 renderer.onFps = fpsHandler;
 renderer.start();
+// Start paused — user clicks play to begin
+renderer.togglePause();
+btnPlayPause.textContent = "play_arrow";
 
-// Resume audio on first user interaction (autoplay policy)
-document.addEventListener("click", () => mediaLoader.resumeAudio(), { once: true });
+// Resume AudioContext on first user interaction (autoplay policy)
+document.addEventListener("click", () => {
+  if (mediaLoader._audioCtx && mediaLoader._audioCtx.state === 'suspended') {
+    mediaLoader._audioCtx.resume();
+  }
+}, { once: true });
 
 // Update toolbar time + slider at 10 Hz
 function formatToolbarTime(t) {
@@ -85,6 +126,14 @@ function formatToolbarTime(t) {
          String(secs).padStart(2, "0") + "." +
          String(cs).padStart(2, "0");
 }
+function formatAudioTime(cur, dur) {
+  const fmt = (t) => {
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  };
+  return fmt(cur) + " / " + fmt(dur);
+}
 setInterval(() => {
   const t = Math.max(0, activeRenderer().getTime());
   toolbarTime.textContent = formatToolbarTime(t);
@@ -94,6 +143,13 @@ setInterval(() => {
       timeSlider.max = String(max + SLIDER_EXTEND);
     }
     timeSlider.value = t;
+  }
+  // Audio slider update
+  const as = mediaLoader.getAudioState();
+  if (as && !audioSliderDragging) {
+    audioSlider.max = String(as.duration || 100);
+    audioSlider.value = String(as.currentTime);
+    audioTimeEl.textContent = formatAudioTime(as.currentTime, as.duration);
   }
 }, 100);
 
@@ -242,7 +298,10 @@ btnShadertoy.addEventListener("click", async () => {
 
 // ── Time slider ───────────────────────────────────────────
 timeSlider.addEventListener("pointerdown", () => { sliderDragging = true; });
-document.addEventListener("pointerup", () => { sliderDragging = false; });
+document.addEventListener("pointerup", () => {
+  sliderDragging = false;
+  audioSliderDragging = false;
+});
 timeSlider.addEventListener("input", () => {
   activeRenderer().seekTo(parseFloat(timeSlider.value));
 });
@@ -253,11 +312,37 @@ btnResetTime.addEventListener("click", () => {
   toolbarTime.textContent = "00:00.00";
 });
 
+// ── Audio slider ──────────────────────────────────────────
+audioSlider.addEventListener("pointerdown", () => { audioSliderDragging = true; });
+audioSlider.addEventListener("input", () => {
+  mediaLoader.seekAudio(parseFloat(audioSlider.value));
+});
+
+btnAudioPlayPause.addEventListener("click", () => {
+  if (mediaLoader.audioPlaying) {
+    mediaLoader.pauseAudio();
+    btnAudioPlayPause.textContent = "play_arrow";
+  } else {
+    mediaLoader.resumeAudio();
+    btnAudioPlayPause.textContent = "pause";
+  }
+});
+
 btnPlayPause.addEventListener("click", () => {
   const r = activeRenderer();
   r.togglePause();
   btnPlayPause.textContent = r.paused ? "play_arrow" : "pause";
   localStorage.setItem("simpleshader_paused", r.paused ? "1" : "0");
+  // Sync audio playback with renderer pause state
+  if (mediaLoader.hasAudio) {
+    if (r.paused) {
+      mediaLoader.pauseAudio();
+      btnAudioPlayPause.textContent = "play_arrow";
+    } else {
+      mediaLoader.resumeAudio();
+      btnAudioPlayPause.textContent = "pause";
+    }
+  }
 });
 
 // ── Icon bar ──────────────────────────────────────────────
@@ -486,6 +571,13 @@ async function applyShader(source) {
   }
   // Assign to active renderer
   activeRenderer().mediaLoader = mediaLoader;
+
+  // Show/hide audio toolbar controls
+  const hasAudio = mediaLoader.hasAudio;
+  audioControls.classList.toggle("hidden", !hasAudio);
+
+  // Set audio config for tuner panel
+  tuner.setAudioConfig(hasAudio ? buildAudioConfig() : null);
 
   let resolved;
   try {

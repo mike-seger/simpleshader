@@ -3,7 +3,7 @@ precision highp float;
 // Lipstick — Glossy Specular Reflections
 // Raymarched lipstick grid with mirror reflections and audio reactivity
 
-// @iChannel0 "../../media/audio/California Sunshine - The Gate To The Past (Remix).mp3"  audio
+// @iChannel0 "../../media/audio/01 - Perpetual Overload.mp3"  audio
 
 uniform vec2 u_resolution;
 uniform float u_time;
@@ -14,20 +14,19 @@ const vec3 LIGHT_COLOR = vec3(0.9725, 1.0, 0.7804);
 const float LIGHT_INTENSITY = 0.9;    // @range(0.0, 5.0, 0.05)
 const float LIGHT_DIFFUSION = 1.5;    // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;       // @range(0.0, 2.0, 0.05)
-const float CAMERA_ANGLE = 180.0;      // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
+const float CAMERA_ANGLE = 180.0;     // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
 const float ZOOM = 2.2;               // @range(0.5, 4.0, 0.05)
 const float BASE_HEIGHT = 1.275;      // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;     // @range(0.1, 1.5, 0.025)
-const float WAX_HEIGHT = 0.5;        // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
+const float WAX_HEIGHT = 0.5;         // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
 const float WAX_ANGLE = 55.5;         // @range(0.0, 75.0, 0.5) @label Cut Angle (degrees)
-const float WAX_CHAMFER = 0.115;       // @range(0.0, 0.2, 0.005) @label Edge Chamfer
+const float WAX_CHAMFER = 0.115;      // @range(0.0, 0.2, 0.005) @label Edge Chamfer
 const float GRID_NX = 4.0;            // @range(1.0, 7.0, 1.0) @label Columns
-const float GRID_NZ = 5.0;            // @range(1.0, 7.0, 1.0) @label Rows
+const float GRID_NZ = 4.0;            // @range(1.0, 7.0, 1.0) @label Rows
 const float GRID_DX = 1.6;            // @range(1.0, 5.0, 0.1) @label X Spacing (×diam)
 const float GRID_DZ = 1.6;            // @range(1.0, 5.0, 0.1) @label Z Spacing (×diam)
 const float BASE_DIAM = 1.0;          // @range(0.5, 3.0, 0.05) @label Base Diameter
 const bool REFLECTIONS = true;
-const bool AA = false;                 // @label Anti-Aliasing (2×2)
 const bool AUDIO = true;              // @label Audio Reactive Wax
 // @lil-gui-end
 
@@ -432,32 +431,20 @@ void main() {
     vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
     vec3 up = cross(right, forward);
 
-    // Anti-aliasing: 2×2 supersampling when AA enabled, single sample otherwise
-    vec3 total = vec3(0.0);
-    for (int si = 0; si < 2; si++) {
-        for (int sj = 0; sj < 2; sj++) {
-            vec2 off = AA ? (vec2(float(si), float(sj)) - 0.5) * 0.5 : vec2(0.0);
-            vec2 suv = (2.0 * (gl_FragCoord.xy + off) - u_resolution) / min(u_resolution.x, u_resolution.y);
-            vec3 rd = normalize(forward * ZOOM + right * suv.x + up * suv.y);
+    vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
 
-            vec2 hit = raymarch(ro, rd);
+    vec2 hit = raymarch(ro, rd);
 
-            vec3 col;
-            if (hit.x > 0.0) {
-                vec3 p = ro + rd * hit.x;
-                float hitMat = floor(hit.y / 100.0);
-                float hitCylId = hit.y - hitMat * 100.0;
-                vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
-                col = shade(p, rd, n, hit.y);
-            } else {
-                col = skyColor(rd);
-            }
-            total += col;
-            if (!AA) break;
-        }
-        if (!AA) break;
+    vec3 col;
+    if (hit.x > 0.0) {
+        vec3 p = ro + rd * hit.x;
+        float hitMat = floor(hit.y / 100.0);
+        float hitCylId = hit.y - hitMat * 100.0;
+        vec3 n = hitMat > 2.5 ? calcBulletNormal(p, hitCylId) : calcNormal(p, 0.0005);
+        col = shade(p, rd, n, hit.y);
+    } else {
+        col = skyColor(rd);
     }
-    vec3 col = total * (AA ? 0.25 : 1.0);
 
     // Vignette
     vec2 q = gl_FragCoord.xy / u_resolution;

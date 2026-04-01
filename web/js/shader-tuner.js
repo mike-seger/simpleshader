@@ -209,6 +209,13 @@ export default class ShaderTuner {
     this._gui = null;
     this._parsed = [];
     this._proxyObj = {};
+    /** @type {{tracks: {label:string, url:string}[], currentUrl: string, onSwitch: (url:string)=>void}|null} */
+    this._audioConfig = null;
+  }
+
+  /** Set audio track switching configuration. Call before build(). */
+  setAudioConfig(config) {
+    this._audioConfig = config;
   }
 
   async build() {
@@ -217,7 +224,9 @@ export default class ShaderTuner {
     const source = this._getSource();
     this._parsed = parseConstants(source);
 
-    if (this._parsed.length === 0) {
+    const hasAudio = this._audioConfig && this._audioConfig.tracks.length > 0;
+
+    if (this._parsed.length === 0 && !hasAudio) {
       return false;
     }
 
@@ -225,6 +234,25 @@ export default class ShaderTuner {
     this._gui = new GUI({ container: this._container, autoPlace: false, width: 200 });
     this._gui.title("Controls");
     this._proxyObj = {};
+
+    // Audio track selector (if audio is active)
+    if (hasAudio) {
+      const ac = this._audioConfig;
+      const trackMap = {};
+      for (const t of ac.tracks) trackMap[t.label] = t.url;
+      // Find current label
+      const cur = ac.tracks.find(t => t.url === ac.currentUrl);
+      this._proxyObj.__audioTrack = cur ? cur.label : ac.tracks[0].label;
+      const folder = this._gui.addFolder("Audio");
+      folder.add(this._proxyObj, "__audioTrack", Object.keys(trackMap))
+        .name("Track")
+        .onChange((label) => {
+          const url = trackMap[label];
+          if (url) ac.onSwitch(url);
+        });
+    }
+
+    if (this._parsed.length === 0) return true;
 
     // Group consecutive constants by first prefix (e.g. STAR from STAR_SIZE)
     const groups = [];

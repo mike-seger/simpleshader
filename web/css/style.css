@@ -234,7 +234,7 @@ body {
 }
 #btn-shadertoy:hover { background: #7b55b5; }
 
-#btn-playpause, #btn-reset-time {
+#btn-playpause, #btn-reset-time, #btn-audio-playpause {
   font-family: 'Material Icons Round-Regular';
   background: #444;
   color: #fff;
@@ -247,17 +247,76 @@ body {
   min-width: 28px;
   text-align: center;
 }
-#btn-playpause:hover, #btn-reset-time:hover { background: #555; }
+#btn-playpause:hover, #btn-reset-time:hover, #btn-audio-playpause:hover { background: #555; }
 
 #time-slider {
   flex: 1;
   min-width: 60px;
-  max-width: 400px;
   accent-color: #007acc;
   cursor: pointer;
   height: 4px;
 }
 #toolbar-time {
+  font-size: 11px;
+  color: #aaa;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+/* ── Audio controls (visible when shader uses @iChannel audio) ── */
+#audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+#audio-controls.hidden { display: none; }
+
+/* When audio controls are visible, share space evenly with the time slider */
+#editor-toolbar:has(#audio-controls:not(.hidden)) #time-slider {
+  flex: 1;
+  max-width: none;
+}
+
+#audio-slider {
+  flex: 1;
+  min-width: 40px;
+  accent-color: #e67e22;
+  cursor: pointer;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+#audio-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+}
+#audio-slider::-moz-range-track {
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+}
+#audio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e67e22;
+  margin-top: -4px;
+  cursor: pointer;
+}
+#audio-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e67e22;
+  border: none;
+  cursor: pointer;
+}
+#audio-time {
   font-size: 11px;
   color: #aaa;
   font-family: monospace;

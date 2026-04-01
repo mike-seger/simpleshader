@@ -14,15 +14,22 @@ applyTo: "**/*.glsl"
 - No unsigned types (`uint`, `uvec2`, etc.)
 - No bitwise operators (`<<`, `>>`, `&`, `|`, `^`)
 - `for` loops must have constant bounds — no `for (int i = 0; i < N; i++)` where N is a variable
+- `for` loops must have all three expressions — `for(x; y; )` is invalid; use a separate variable if the increment is computed in the body
+- `for` loop index cannot be modified inside the loop body — use a separate variable (e.g. `float st = 0.; for(int i=0; i<N; i++) { ... st += h; }`)
+- `round()` is not available — use `floor(x + 0.5)` instead
 - Array indexing must use constants or loop variables — no `arr[dynamicIndex]`
 - `switch`/`case` not available — use `if`/`else if` chains
 
 ## Uniforms
 
-Only these uniforms are available (do not declare others):
+These uniforms are available and **must be explicitly declared** in the shader (they are not auto-injected):
 ```glsl
 uniform vec2  u_resolution;   // canvas size in pixels
 uniform float u_time;          // elapsed seconds
+```
+
+`u_channel*` sampler uniforms are injected automatically when `@iChannel` or `@pass` annotations are present — do not declare them manually:
+```glsl
 uniform sampler2D u_channel0;  // multipass: previous pass / @iChannel media
 uniform sampler2D u_channel1;  // multipass: pass before that / @iChannel media
 ```
@@ -33,6 +40,10 @@ When porting from Shadertoy, replace:
 - `fragCoord` → `gl_FragCoord.xy`
 - `fragColor` → `gl_FragColor`
 - `iChannel0` → `u_channel0`
+- `texture()` → `texture2D()`
+- `iDate` → remove or approximate (e.g. `iDate.z` → `floor(u_time)` for a varying seed)
+- `iMouse` → remove (no mouse uniform); inline the no-mouse fallback values
+- `mainImage(out vec4 O, in vec2 F)` → `void main()` using `gl_FragCoord.xy` and `gl_FragColor`
 
 ## @lil-gui Tunable Constants
 

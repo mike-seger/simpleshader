@@ -132,8 +132,8 @@ export class MediaLoader {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);
 
-    // Try to start playback (may be blocked by autoplay policy)
-    try { await audio.play(); } catch (_) { /* user gesture required — deferred */ }
+    // Don't auto-play — wait for user gesture via play button
+    // try { await audio.play(); } catch (_) { /* user gesture required — deferred */ }
 
     const update = () => {
       analyser.getByteFrequencyData(freqData);
@@ -193,8 +193,60 @@ export class MediaLoader {
     }
   }
 
+  /** Pause audio playback. */
+  pauseAudio() {
+    for (const el of this._audioElements) {
+      if (!el.paused) el.pause();
+    }
+  }
+
+  /** @returns {boolean} True if audio is currently playing. */
+  get audioPlaying() {
+    const el = this._audioElements[0];
+    return el ? !el.paused : false;
+  }
+
   /** @returns {boolean} True if any channels are loaded. */
   get hasMedia() {
     return this.channels.size > 0;
+  }
+
+  /** @returns {boolean} True if any audio channels are loaded. */
+  get hasAudio() {
+    return this._audioElements.length > 0;
+  }
+
+  /**
+   * Get the first audio element's playback state.
+   * @returns {{currentTime: number, duration: number}|null}
+   */
+  getAudioState() {
+    const el = this._audioElements[0];
+    if (!el) return null;
+    return { currentTime: el.currentTime, duration: el.duration || 0 };
+  }
+
+  /** Seek audio to a specific time in seconds. */
+  seekAudio(time) {
+    for (const el of this._audioElements) {
+      el.currentTime = time;
+    }
+  }
+
+  /**
+   * Switch the audio source on the first audio channel, preserving the
+   * analyser graph. Only works if audio was previously loaded.
+   * @param {string} url  Absolute or relative URL to the new audio file.
+   */
+  async switchAudioSource(url) {
+    const el = this._audioElements[0];
+    if (!el) return;
+    const wasPlaying = !el.paused;
+    el.pause();
+    el.src = url;
+    el.load();
+    if (wasPlaying) {
+      try { await el.play(); } catch (_) { /* autoplay policy */ }
+    }
   }
 }

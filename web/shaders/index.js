@@ -51,6 +51,7 @@ const SHADER_INDEX = [
       { name: "Total Noob", path: "web/shaders/shadertoy/total-noob.glsl" },
       { name: "Turbulent Star", path: "web/shaders/shadertoy/turbulent-star.glsl" },
       { name: "Vertical Ribbon", path: "web/shaders/shadertoy/vertical-ribbon.glsl" },
+      { name: "Year Of Truchets 038", path: "web/shaders/shadertoy/year-of-truchets-038.glsl" },
     ],
   },
   {
