@@ -3,6 +3,10 @@ precision highp float;
 // Lipstick — Glossy Specular Reflections
 // Raymarched lipstick grid with mirror reflections and audio reactivity
 
+// Maximum render resolution — pixels beyond this are discarded.
+// Set to 0.0 to disable the cap (use full canvas resolution).
+#define MAX_RES 1920
+
 // @iChannel0 "../../media/audio/01 - Perpetual Overload.mp3"  audio
 
 uniform vec2 u_resolution;
@@ -35,7 +39,7 @@ const float AUDIO_BAND4 = 0.80;             // @range(0.0, 1.0, 0.01) @label Ban
 const float AUDIO_WIDTH = 0.30;             // @range(0.05, 1.0, 0.01) @label Band Width
 const float AUDIO_POWER = 1.4;              // @range(0.5, 5.0, 0.1) @label Curve Power
 const float AUDIO_MIN = 0.6;                // @range(0.0, 3.0, 0.05) @label Min Height
-const float AUDIO_MAX = 1.8;               // @range(1.0, 6.0, 0.05) @label Max Height
+const float AUDIO_MAX = 1.8;                // @range(1.0, 6.0, 0.05) @label Max Height
 
 const float CYL_RADIUS = 0.448;
 const float GROUND_Y = 0.0;
@@ -423,7 +427,20 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
 }
 
 void main() {
-    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.x, u_resolution.y);
+    // Resolution cap: remap coordinates so the shader runs as if the
+    // viewport were MAX_RES wide.  Every pixel still gets shaded, but
+    // the effective detail matches a smaller framebuffer.
+    vec2 res = u_resolution;
+    vec2 fc  = gl_FragCoord.xy;
+    #if MAX_RES > 0
+    if (res.x > float(MAX_RES)) {
+        float scale = float(MAX_RES) / res.x;
+        fc  *= scale;
+        res *= scale;
+    }
+    #endif
+
+    vec2 uv = (2.0 * fc - res) / min(res.x, res.y);
 
     // Read audio frequency bands
     // Sample 4 frequency bands across the full spectrum
@@ -461,7 +478,7 @@ void main() {
     }
 
     // Vignette
-    vec2 q = gl_FragCoord.xy / u_resolution;
+    vec2 q = fc / res;
     float vig = 1.0 - 0.3 * dot((q - 0.5) * 1.5, (q - 0.5) * 1.5);
     col *= vig;
 
