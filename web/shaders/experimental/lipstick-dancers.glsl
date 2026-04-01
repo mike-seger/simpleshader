@@ -15,7 +15,7 @@ const float LIGHT_INTENSITY = 0.9;          // @range(0.0, 5.0, 0.05)
 const float LIGHT_DIFFUSION = 1.5;          // @range(0.0, 2.0, 0.05)
 const float CAMERA_SPEED = 0.3;             // @range(0.0, 2.0, 0.05)
 const float CAMERA_ANGLE = 180.0;           // @range(-180.0, 180.0, 1.0) @label Start Angle (degrees)
-const float ZOOM = 2.25;                    // @range(0.5, 4.0, 0.05)
+const float ZOOM = 2.55;                    // @range(0.5, 4.0, 0.05)
 const float BASE_HEIGHT = 1.825;            // @range(0.3, 3.0, 0.025)
 const float COLLAR_HEIGHT = 0.45;           // @range(0.1, 1.5, 0.025)
 const float WAX_HEIGHT = 0.5;               // @range(0.5, 3.0, 0.025) @label Wax Height (×radius)
@@ -27,23 +27,24 @@ const float GRID_DX = 1.6;                  // @range(1.0, 5.0, 0.1) @label X Sp
 const float GRID_DZ = 1.6;                  // @range(1.0, 5.0, 0.1) @label Z Spacing (×diam)
 const float BASE_DIAM = 1.05;               // @range(0.5, 3.0, 0.05) @label Base Diameter
 const bool REFLECTIONS = true;
-const bool AUDIO_REACTIVITY = true;         // @label Audio Reactivity
-const float AUDIO_REACTIVITY_BAND1 = 0.51;  // @range(0.0, 1.0, 0.01) @label Band 1 Center
-const float AUDIO_REACTIVITY_BAND2 = 0.11;  // @range(0.0, 1.0, 0.01) @label Band 2 Center
-const float AUDIO_REACTIVITY_BAND3 = 0.32;  // @range(0.0, 1.0, 0.01) @label Band 3 Center
-const float AUDIO_REACTIVITY_BAND4 = 1.0;   // @range(0.0, 1.0, 0.01) @label Band 4 Center
-const float AUDIO_REACTIVITY_WIDTH = 0.30;  // @range(0.05, 1.0, 0.01) @label Band Width
-const float AUDIO_REACTIVITY_POWER = 2.7;   // @range(0.5, 5.0, 0.1) @label Curve Power
-const float AUDIO_REACTIVITY_MIN = 0.95;    // @range(0.0, 3.0, 0.05) @label Min Height
-const float AUDIO_REACTIVITY_MAX = 3.0;     // @range(1.0, 6.0, 0.05) @label Max Height
-// @lil-gui-end
+const bool AUDIO = true;                    // @label Audio Reactivity
+const float AUDIO_BAND1 = 0.20;             // @range(0.0, 1.0, 0.01) @label Band 1 Center
+const float AUDIO_BAND2 = 0.40;             // @range(0.0, 1.0, 0.01) @label Band 2 Center
+const float AUDIO_BAND3 = 0.60;             // @range(0.0, 1.0, 0.01) @label Band 3 Center
+const float AUDIO_BAND4 = 0.80;             // @range(0.0, 1.0, 0.01) @label Band 4 Center
+const float AUDIO_WIDTH = 0.30;             // @range(0.05, 1.0, 0.01) @label Band Width
+const float AUDIO_POWER = 2.0;              // @range(0.5, 5.0, 0.1) @label Curve Power
+const float AUDIO_MIN = 0.6;                // @range(0.0, 3.0, 0.05) @label Min Height
+const float AUDIO_MAX = 2.55;               // @range(1.0, 6.0, 0.05) @label Max Height
 
-const float CYL_RADIUS = 0.4;
+const float CYL_RADIUS = 0.448;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 200.0;
 const float SURF_DIST = 0.0005;
 const float F0_CHROME = 0.9;
 const float SPEC_POWER = 200.0;
+// @lil-gui-end
+
 
 float hash(float n) { return fract(sin(n) * 43758.5453123); }
 
@@ -69,19 +70,19 @@ float freqs[4];
 // proximity and blended.
 float audioWaxHeight(float id) {
     float h = hash(id * 13.7);
-    float w = AUDIO_REACTIVITY_WIDTH;
+    float w = AUDIO_WIDTH;
     float f = 0.0;
-    f += freqs[0] * clamp(1.0 - abs(h - AUDIO_REACTIVITY_BAND1) / w, 0.0, 1.0);
-    f += freqs[1] * clamp(1.0 - abs(h - AUDIO_REACTIVITY_BAND2) / w, 0.0, 1.0);
-    f += freqs[2] * clamp(1.0 - abs(h - AUDIO_REACTIVITY_BAND3) / w, 0.0, 1.0);
-    f += freqs[3] * clamp(1.0 - abs(h - AUDIO_REACTIVITY_BAND4) / w, 0.0, 1.0);
-    f = pow(clamp(f, 0.0, 1.0), AUDIO_REACTIVITY_POWER);
-    return mix(AUDIO_REACTIVITY_MIN, AUDIO_REACTIVITY_MAX, f);
+    f = max(f, freqs[0] * clamp(1.0 - abs(h - AUDIO_BAND1) / w, 0.0, 1.0));
+    f = max(f, freqs[1] * clamp(1.0 - abs(h - AUDIO_BAND2) / w, 0.0, 1.0));
+    f = max(f, freqs[2] * clamp(1.0 - abs(h - AUDIO_BAND3) / w, 0.0, 1.0));
+    f = max(f, freqs[3] * clamp(1.0 - abs(h - AUDIO_BAND4) / w, 0.0, 1.0));
+    f = pow(f, AUDIO_POWER);
+    return mix(AUDIO_MIN, AUDIO_MAX, f);
 }
 
 // Effective wax height for a given lipstick ID
 float getWaxHeight(float id) {
-    return AUDIO_REACTIVITY ? audioWaxHeight(id) : WAX_HEIGHT;
+    return AUDIO ? audioWaxHeight(id) : WAX_HEIGHT;
 }
 
 // Capped cylinder SDF — along Y axis, between y=yBase and y=yBase+h

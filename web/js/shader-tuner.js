@@ -278,9 +278,13 @@ export default class ShaderTuner {
         : group.items;
 
       if (gate && gated.length > 0) {
-        // Create the folder, then inject a checkbox into its title bar so the
-        // enable/disable toggle lives inside the header, not above it.
-        const folder = this._gui.addFolder(prettyName(group.prefix));
+        // Use @label from the gate's comment as folder title, else prettyName
+        let folderTitle = prettyName(group.prefix);
+        if (gate.comment) {
+          const lm = gate.comment.match(/@label\s+(.+?)(?:\s*@|\s*$)/);
+          if (lm) folderTitle = lm[1].trim();
+        }
+        const folder = this._gui.addFolder(folderTitle);
         folder.open();
 
         // Inject checkbox into the folder title element
