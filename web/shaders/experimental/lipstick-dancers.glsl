@@ -42,7 +42,7 @@ const float AUDIO_MAX = 1.8;                // @range(1.0, 6.0, 0.05) @label Max
 const float CYL_RADIUS = 0.448;
 const float GROUND_Y = 0.0;
 const float MAX_DIST = 200.0;
-const float SURF_DIST = 0.001;
+const float SURF_DIST = 0.0005;
 const float F0_CHROME = 0.9;
 const float SPEC_POWER = 200.0;
 // @lil-gui-end
@@ -230,38 +230,32 @@ vec3 sdFullLipstick(vec3 p, float r, float id) {
     // Single sqrt for XZ radius — reused by all components
     float rXZ = length(p.xz);
 
-    // Bounding cylinder early-out (skips all SDF math for far lipsticks)
-    float maxH = collarTop + tipR * 3.5;
-    float dBound = max(rXZ - baseR, max(-p.y - baseR, p.y - maxH));
-    if (dBound > 0.5) return vec3(dBound, 1.0, id);
-
-    // Dome bottom: hemisphere at origin, clamped to y <= 0
-    float dome = max(sqrt(rXZ * rXZ + p.y * p.y) - baseR, p.y);
-
-    // Base capped cylinder [0, BASE_HEIGHT] — bevel in normal only
-    float baseCyl = max(rXZ - baseR, max(-p.y, p.y - BASE_HEIGHT));
-    float base = min(dome, baseCyl);
+    // Base capped cylinder [0, BASE_HEIGHT] — bevels handled by analytical normals
+    float base = max(rXZ - baseR, max(-p.y, p.y - BASE_HEIGHT));
+    // Dome bottom only matters below y=0 (rare from overhead camera)
+    if (p.y < 0.0) base = min(base, max(sqrt(rXZ * rXZ + p.y * p.y) - baseR, p.y));
 
     // Gold collar [BASE_HEIGHT-0.03, collarTop]
     float cy = p.y - (BASE_HEIGHT - 0.03);
     float collar = max(rXZ - collarR, max(-cy, cy - (COLLAR_HEIGHT + 0.03)));
 
-    // Bullet tip (inlined — reuses rXZ)
-    float waxH = getWaxHeight(id);
-    float shaft = tipR * waxH;
-    float slope = tan(radians(WAX_ANGLE));
-    float rise = slope * tipR;
-    float halfRise = rise * 0.5;
-    float nLen = sqrt(halfRise * halfRise / (tipR * tipR) + 1.0);
-    float qy = p.y - (collarTop - 0.03);
-    float dOblique = (qy - shaft - halfRise - p.x * halfRise / tipR) / nLen;
-    float tip = max(max(rXZ - tipR, dOblique), -qy);
-
-    // Wax gets a small bias so it wins at the collar-wax junction,
-    // avoiding calcNormal crease artifacts (wax uses analytical normals).
     vec3 res = vec3(base, 1.0, id);
     if (collar < res.x) res = vec3(collar, 2.0, id);
-    if (tip < res.x + 0.015) res = vec3(tip, 3.0, id);
+
+    // Bullet tip — only compute when above collar (skips getWaxHeight for low-altitude steps)
+    if (p.y > collarTop - 0.5) {
+        float waxH = getWaxHeight(id);
+        float slope = tan(radians(WAX_ANGLE));
+        float shaft = tipR * waxH;
+        float rise = slope * tipR;
+        float halfRise = rise * 0.5;
+        float nLen = sqrt(halfRise * halfRise / (tipR * tipR) + 1.0);
+        float qy = p.y - (collarTop - 0.03);
+        float dOblique = (qy - shaft - halfRise - p.x * halfRise / tipR) / nLen;
+        float tip = max(max(rXZ - tipR, dOblique), -qy);
+        if (tip < res.x + 0.015) res = vec3(tip, 3.0, id);
+    }
+
     return res;
 }
 
@@ -293,7 +287,7 @@ vec2 mapScene(vec3 p) {
     float spZ = r0 * 2.0 * GRID_DZ;
     float halfNX = (GRID_NX - 1.0) * 0.5;
     float halfNZ = (GRID_NZ - 1.0) * 0.5;
-    float maxR = r0 * 1.1;  // baseR is the widest part
+    float maxR = r0 * 1.1;
 
     // Spatial culling: check 5×5 neighborhood around nearest grid cell
     float ci = floor(p.x / spX + halfNX + 0.5);
@@ -308,8 +302,8 @@ vec2 mapScene(vec3 p) {
                     float fi = fi_idx - halfNX;
                     float fj = fj_idx - halfNZ;
                     vec3 cp = p - vec3(fi * spX, 0.0, fj * spZ);
-                    // 2D pre-cull: radial distance is a lower bound on 3D SDF
-                    if (length(cp.xz) <= res.x + maxR) {
+                    // 2D pre-cull: skip if XZ distance alone already exceeds current best
+                    if (length(cp.xz) - maxR < res.x) {
                         float id = fi_idx * GRID_NZ + fj_idx + 1.0;
                         vec3 ls = sdFullLipstick(cp, r0, id);
                         if (ls.x < res.x) {
@@ -323,43 +317,38 @@ vec2 mapScene(vec3 p) {
     return res;
 }
 
-// Raymarch the scene. Returns vec2(distance, materialID).
-vec2 raymarch(vec3 ro, vec3 rd, int maxSteps) {
-    float t = 0.0;
+// Raymarch helpers — dedicated loop counts avoid runtime maxSteps check overhead
+vec2 raymarchGround(vec3 ro, vec3 rd) {
     vec2 res = vec2(-1.0, -1.0);
-
-    // Analytical ground plane intersection — guarantees floor hit at any distance
     if (rd.y < -0.0001) {
         float tGround = (ro.y - GROUND_Y) / (-rd.y);
-        if (tGround > 0.0) {
-            res = vec2(tGround, 0.0);  // ground material = 0
-        }
+        if (tGround > 0.0) res = vec2(tGround, 0.0);
     }
+    return res;
+}
 
-    // Skip empty space: intersect ray with scene bounding sphere
-    vec3 sc = vec3(0.0, 2.0, 0.0);
-    float sr = 6.0;
-    vec3 oc = ro - sc;
-    float ob = dot(oc, rd);
-    float oc2 = dot(oc, oc) - sr * sr;
-    float disc = ob * ob - oc2;
-    if (disc > 0.0) {
-        float t0 = -ob - sqrt(disc);
-        if (t0 > 0.0) t = t0;
-    } else if (res.x < 0.0) {
-        // Ray misses scene entirely — only ground can be hit
-        return res;
-    }
-
+vec2 raymarchPrimary(vec3 ro, vec3 rd) {
+    float t = 0.0;
+    vec2 res = raymarchGround(ro, rd);
     float tMax = res.x > 0.0 ? res.x : MAX_DIST;
-    for (int i = 0; i < 36; i++) {
-        if (i >= maxSteps) break;
+    for (int i = 0; i < 64; i++) {
         vec3 p = ro + rd * t;
         vec2 h = mapScene(p);
-        if (h.x < SURF_DIST) {
-            res = vec2(t, h.y);
-            break;
-        }
+        if (h.x < SURF_DIST) { res = vec2(t, h.y); break; }
+        t += h.x;
+        if (t > tMax) break;
+    }
+    return res;
+}
+
+vec2 raymarchReflection(vec3 ro, vec3 rd) {
+    float t = 0.0;
+    vec2 res = raymarchGround(ro, rd);
+    float tMax = res.x > 0.0 ? res.x : MAX_DIST;
+    for (int i = 0; i < 16; i++) {
+        vec3 p = ro + rd * t;
+        vec2 h = mapScene(p);
+        if (h.x < SURF_DIST) { res = vec2(t, h.y); break; }
         t += h.x;
         if (t > tMax) break;
     }
@@ -464,7 +453,7 @@ vec3 shade(vec3 p, vec3 rd, vec3 n, float encodedId) {
     // One-bounce mirror reflection (fewer steps — reflections are approximate)
     vec3 reflDir = reflect(rd, n);
     float bias = 0.02;
-    vec2 reflHit = raymarch(p + n * bias, reflDir, 16);
+    vec2 reflHit = raymarchReflection(p + n * bias, reflDir);
     vec3 reflColor;
     if (reflHit.x > 0.0) {
         vec3 rp = p + n * bias + reflDir * reflHit.x;
@@ -533,7 +522,7 @@ void main() {
 
     vec3 rd = normalize(forward * ZOOM + right * uv.x + up * uv.y);
 
-    vec2 hit = raymarch(ro, rd, 36);
+    vec2 hit = raymarchPrimary(ro, rd);
 
     vec3 col;
     if (hit.x > 0.0) {
