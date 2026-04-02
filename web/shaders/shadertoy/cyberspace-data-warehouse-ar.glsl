@@ -8,8 +8,22 @@ precision highp float;
 // and Inigo Quilez (iq) for  https://iquilezles.org/www/index.htm
 // and whole Shadertoy community for inspiration.
 
+// @iChannel0 "../../media/audio/01 - Perpetual Overload.mp3"  audio
+
 uniform vec2 u_resolution;
 uniform float u_time;
+
+// @lil-gui-start
+const bool  AUDIO = true;                    // @label Audio Reactivity
+const float AUDIO_BAND1 = 0.20;              // @range(0.0, 1.0, 0.01) @label Band 1 Center
+const float AUDIO_BAND2 = 0.40;              // @range(0.0, 1.0, 0.01) @label Band 2 Center
+const float AUDIO_BAND3 = 0.60;              // @range(0.0, 1.0, 0.01) @label Band 3 Center
+const float AUDIO_BAND4 = 0.80;              // @range(0.0, 1.0, 0.01) @label Band 4 Center
+const float AUDIO_WIDTH = 0.30;              // @range(0.05, 1.0, 0.01) @label Band Width
+const float AUDIO_POWER = 1.4;               // @range(0.5, 5.0, 0.1) @label Curve Power
+const float AUDIO_MIN = 0.2;                 // @range(0.0, 1.0, 0.05) @label Min Elevation
+const float AUDIO_MAX = 2.0;                 // @range(1.0, 4.0, 0.05) @label Max Elevation
+// @lil-gui-end
 
 #define h21(p) ( fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453) ) //hash21
 #define BC vec3(.26,.4,.6) //base color
@@ -35,6 +49,22 @@ float noise( in vec2 f ) //gradient noise
                      h21( i + vec2(1,0) ), u.x),
                 mix( h21( i + vec2(0,1) ), 
                      h21( i + vec2(1,1) ), u.x), u.y);
+}
+
+// Audio frequency bands
+float freqs[4];
+
+// Audio-reactive elevation factor per pixel
+float audioElevation(vec2 id, float hh) {
+    float h = fract(sin(dot(id + hh, vec2(12.9898, 78.233))) * 43758.5453);
+    float w = AUDIO_WIDTH;
+    float f = 0.0;
+    f = max(f, freqs[0] * clamp(1.0 - abs(h - AUDIO_BAND1) / w, 0.0, 1.0));
+    f = max(f, freqs[1] * clamp(1.0 - abs(h - AUDIO_BAND2) / w, 0.0, 1.0));
+    f = max(f, freqs[2] * clamp(1.0 - abs(h - AUDIO_BAND3) / w, 0.0, 1.0));
+    f = max(f, freqs[3] * clamp(1.0 - abs(h - AUDIO_BAND4) / w, 0.0, 1.0));
+    f = pow(f, AUDIO_POWER);
+    return mix(AUDIO_MIN, AUDIO_MAX, f);
 }
 
 vec3 HexToSqr (vec2 st, inout vec2 uf) //hexagonal cell coords to square face coords 
@@ -103,6 +133,7 @@ void pixel (float hh, float sm, vec2 st, vec2 s, float n,  vec4 R, inout vec4 C)
                 + (noise(id*.2 + u_time*(.5+hh*n)*.5)-.1)) //big noise
                 * smoothstep (6.,2.,length(id-4.5)) //fade noise to face edges
                 * ((n == 1.) ? (smoothstep(d*5., d*5.+2. ,length(id-4.5)+.5)) : 1.) //remove noise on top face while sphere is up 
+                * (AUDIO ? audioElevation(id, hh) : 1.0) //audio-reactive elevation
                 , 0.95); 
 
     vec4 P =  vec4(BC*(1.+hh*.75)*b,1); // pixel base color
@@ -148,6 +179,12 @@ void tile(vec2 uv,inout vec4 C)
 
 void main()
 {
+    // Sample 4 frequency bands from audio texture
+    freqs[0] = texture2D(u_channel0, vec2(0.02, 0.25)).x;         // sub-bass / bass
+    freqs[1] = texture2D(u_channel0, vec2(0.12, 0.25)).x * 1.5;   // low-mid
+    freqs[2] = texture2D(u_channel0, vec2(0.35, 0.25)).x * 2.5;   // upper-mid
+    freqs[3] = texture2D(u_channel0, vec2(0.65, 0.25)).x * 4.0;   // high
+
     vec2 g = gl_FragCoord.xy;
     vec2 rz = u_resolution
         ,uv = (g+g-rz)/-rz.y;

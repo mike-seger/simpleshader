@@ -37,6 +37,7 @@ const SHADER_INDEX = [
       { name: "Blue Red Shiny 2", path: "web/shaders/shadertoy/blue-red-shiny-2.glsl" },
       { name: "Colourful Reactive Ribbons", path: "web/shaders/shadertoy/colourful-reactive-ribbons.glsl" },
       { name: "Creation By Silexars", path: "web/shaders/shadertoy/creation-by-silexars.glsl" },
+      { name: "Cyberspace Data Warehouse Ar", path: "web/shaders/shadertoy/cyberspace-data-warehouse-ar.glsl" },
       { name: "Cyberspace Data Warehouse", path: "web/shaders/shadertoy/cyberspace-data-warehouse.glsl" },
       { name: "Disco Sun Vortex", path: "web/shaders/shadertoy/disco-sun-vortex.glsl" },
       { name: "Floating Ribbons", path: "web/shaders/shadertoy/floating-ribbons.glsl" },
