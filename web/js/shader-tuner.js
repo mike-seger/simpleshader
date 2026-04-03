@@ -224,7 +224,8 @@ export default class ShaderTuner {
     const source = this._getSource();
     this._parsed = parseConstants(source);
 
-    const hasAudio = this._audioConfig && this._audioConfig.tracks.length > 0;
+    const hasAudio = this._audioConfig &&
+      (this._audioConfig.modTracks.length > 0 || this._audioConfig.audioTracks.length > 0);
 
     if (this._parsed.length === 0 && !hasAudio) {
       return false;
@@ -238,17 +239,31 @@ export default class ShaderTuner {
     // Audio/MOD track selector (if audio is active)
     if (hasAudio) {
       const ac = this._audioConfig;
+      const currentType = ac.defaultType;  // 'mod' | 'audio'
+      const tracks = currentType === 'mod' ? ac.modTracks : ac.audioTracks;
       const trackMap = {};
       const fileMap = {};
-      for (const t of ac.tracks) {
+      for (const t of tracks) {
         trackMap[t.label] = t.url;
         fileMap[t.label] = t.file;
       }
       // Find current label
-      const cur = ac.tracks.find(t => t.url === ac.currentUrl);
-      this._proxyObj.__audioTrack = cur ? cur.label : ac.tracks[0].label;
-      const folderTitle = ac.mediaType === 'mod' ? 'MOD Tracks' : 'Audio';
+      const cur = tracks.find(t => t.url === ac.currentUrl);
+      this._proxyObj.__audioTrack = cur ? cur.label : (tracks[0]?.label || '');
+      const folderTitle = currentType === 'mod' ? 'MOD Tracks' : 'Audio';
       const folder = this._gui.addFolder(folderTitle);
+
+      // Type selector (MOD / Audio)
+      this._proxyObj.__audioType = currentType === 'mod' ? 'MOD' : 'Audio';
+      const typeCtrl = folder.add(this._proxyObj, '__audioType', ['MOD', 'Audio'])
+        .name('Type')
+        .onChange((label) => {
+          const newType = label === 'MOD' ? 'mod' : 'audio';
+          if (newType !== currentType) ac.onSwitchType(newType);
+        });
+      this._enhanceSelect(typeCtrl);
+
+      // Track selector
       const trackCtrl = folder.add(this._proxyObj, "__audioTrack", Object.keys(trackMap))
         .name("Track")
         .onChange((label) => {
@@ -256,21 +271,7 @@ export default class ShaderTuner {
           const file = fileMap[label];
           if (url) ac.onSwitch(url, file);
         });
-
-      // Left/right arrow keys cycle through tracks
-      const selectEl = trackCtrl.$widget.querySelector('select');
-      if (selectEl) {
-        selectEl.addEventListener('keydown', (e) => {
-          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-          e.preventDefault();
-          const opts = Array.from(selectEl.options);
-          let idx = selectEl.selectedIndex;
-          if (e.key === 'ArrowLeft')  idx = (idx - 1 + opts.length) % opts.length;
-          if (e.key === 'ArrowRight') idx = (idx + 1) % opts.length;
-          selectEl.selectedIndex = idx;
-          selectEl.dispatchEvent(new Event('change'));
-        });
-      }
+      this._trackSelect = this._enhanceSelect(trackCtrl);
     }
 
     if (this._parsed.length === 0) return true;
@@ -455,6 +456,37 @@ export default class ShaderTuner {
     }
   }
 
+  /** Add arrow-key cycling and label-click-to-focus on a select controller. */
+  _enhanceSelect(ctrl) {
+    const selectEl = ctrl.$widget.querySelector('select');
+    if (!selectEl) return null;
+    selectEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const opts = Array.from(selectEl.options);
+      let idx = selectEl.selectedIndex;
+      if (e.key === 'ArrowLeft')  idx = (idx - 1 + opts.length) % opts.length;
+      if (e.key === 'ArrowRight') idx = (idx + 1) % opts.length;
+      selectEl.selectedIndex = idx;
+      selectEl.dispatchEvent(new Event('change'));
+    });
+    ctrl.$name.style.cursor = 'pointer';
+    ctrl.$name.addEventListener('click', () => selectEl.focus());
+    return selectEl;
+  }
+
+  /** Focus the topmost interactive control. If audio, focus the Track selector. */
+  focusFirstControl() {
+    if (this._trackSelect) {
+      this._trackSelect.focus();
+      return;
+    }
+    if (this._gui) {
+      const el = this._gui.$children.querySelector('input, select');
+      if (el) el.focus();
+    }
+  }
+
   _apply(p) {
     const newValue = this._proxyObj[p.name];
     p.value = newValue;
@@ -488,5 +520,6 @@ export default class ShaderTuner {
     this._container.innerHTML = "";
     this._parsed = [];
     this._proxyObj = {};
+    this._trackSelect = null;
   }
 }
