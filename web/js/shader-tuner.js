@@ -547,3 +547,96 @@ export default class ShaderTuner {
     this._sliderInputs = [];
   }
 }
+
+/**
+ * Build audio/mod track config for the shader tuner panel.
+ * Loads both mod and audio folder indexes so the user can switch
+ * between track types via the Type selector in the tuner.
+ *
+ * @param {object}   annotations  Parsed @iChannel media annotations
+ * @param {string}   baseUrl      Base URL for resolving relative paths
+ * @param {object}   deps         External dependencies
+ * @param {object}   deps.mediaLoader  MediaLoader instance
+ * @param {Function} deps.getSource    Returns current editor source
+ * @param {Function} deps.setSource    Sets editor source
+ * @param {Function} deps.applyShader  Compiles & applies shader source
+ */
+export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getSource, setSource, applyShader }) {
+  if (!mediaLoader.hasAudio) return null;
+  const currentType = mediaLoader.audioType;  // 'audio' | 'mod'
+  const ann = annotations.find(a => a.type === 'audio' || a.type === 'mod');
+  if (!ann) return null;
+
+  // Derive the folder path from the annotation (e.g. "../../media/mod/song.mod" → "../../media/mod/")
+  const lastSlash = ann.path.lastIndexOf('/');
+  const folder = lastSlash >= 0 ? ann.path.substring(0, lastSlash + 1) : '';
+
+  // Derive both mod and audio folder paths
+  const modFolder = currentType === 'mod' ? folder : folder.replace(/audio\/$/, 'mod/');
+  const audioFolder = currentType === 'audio' ? folder : folder.replace(/mod\/$/, 'audio/');
+
+  async function loadIndex(folderPath) {
+    try {
+      const indexUrl = new URL(folderPath + 'index.js', baseUrl).href;
+      const mod = await import(indexUrl);
+      return mod.default || [];
+    } catch (e) {
+      console.warn('Could not load media index:', folderPath, e);
+      return [];
+    }
+  }
+
+  function buildTracks(files, folderPath) {
+    return files.map(f => ({
+      label: f.replace(/\.[^.]+$/, ''),
+      file: f,
+      url: new URL((folderPath + f).replace(/#/g, '%23'), baseUrl).href,
+    }));
+  }
+
+  const [modFiles, audioFiles] = await Promise.all([
+    loadIndex(modFolder),
+    loadIndex(audioFolder),
+  ]);
+
+  const modTracks = buildTracks(modFiles, modFolder);
+  const audioTracks = buildTracks(audioFiles, audioFolder);
+  const currentUrl = new URL(ann.path.replace(/#/g, '%23'), baseUrl).href;
+
+  return {
+    modTracks,
+    audioTracks,
+    defaultType: currentType,
+    currentUrl,
+    onSwitch: (url, file) => {
+      if (currentType === 'mod') {
+        mediaLoader.switchModSource(url);
+      } else {
+        mediaLoader.switchAudioSource(url);
+      }
+      const src = getSource();
+      const activeFolder = currentType === 'mod' ? modFolder : audioFolder;
+      const newPath = activeFolder + file;
+      const re = new RegExp(
+        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod))',
+      );
+      const updated = src.replace(re, `$1"${newPath}"$2`);
+      if (updated !== src) setSource(updated);
+    },
+    onSwitchType: (newType) => {
+      const tracks = newType === 'mod' ? modTracks : audioTracks;
+      if (tracks.length === 0) return;
+      const targetFolder = newType === 'mod' ? modFolder : audioFolder;
+      const newPath = targetFolder + tracks[0].file;
+      const src = getSource();
+      const re = new RegExp(
+        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)\\s+(?:audio|mod)',
+      );
+      const updated = src.replace(re, `$1"${newPath}" ${newType}`);
+      if (updated !== src) {
+        setSource(updated);
+        applyShader(updated, true);
+      }
+    },
+  };
+}

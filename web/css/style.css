@@ -285,36 +285,6 @@ body {
   accent-color: #e67e22;
   cursor: pointer;
   height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-}
-#audio-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  background: #ccc;
-  border-radius: 2px;
-}
-#audio-slider::-moz-range-track {
-  height: 4px;
-  background: #ccc;
-  border-radius: 2px;
-}
-#audio-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #e67e22;
-  margin-top: -4px;
-  cursor: pointer;
-}
-#audio-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #e67e22;
-  border: none;
-  cursor: pointer;
 }
 #audio-time {
   font-size: 11px;

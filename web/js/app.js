@@ -7,9 +7,12 @@ import Editor from "./editor.js";
 import Sidebar from "./sidebar.js";
 import { initSplitter } from "./splitter.js";
 import { upsertCustomShader, loadCustomShaders } from "./store.js";
-import ShaderTuner from "./shader-tuner.js";
+import ShaderTuner, { buildAudioConfig } from "./shader-tuner.js";
 import { MediaLoader, parseMediaAnnotations } from "./media-loader.js";
 import GpuAudio, { parseGpuAudioAnnotation } from "./gpu-audio.js";
+import { toShadertoy } from "./shadertoy-export.js";
+import PopoutManager from "./popout.js";
+import { resolveForPath, injectChannelUniforms } from "./shader-compiler.js";
 
 // ── DOM refs ──────────────────────────────────────────────
 const canvas        = document.getElementById("glcanvas");
@@ -44,8 +47,6 @@ const audioTimeEl      = document.getElementById("audio-time");
 // ── State ─────────────────────────────────────────────────
 let currentName = null;   // active custom shader name (null = built-in)
 let currentPath = null;   // active built-in shader path
-let popoutWin = null;     // reference to pop-out window
-let popoutPoll = null;    // interval to detect pop-out closure
 let debugVisible = false; // debug overlay state
 
 // ── Time slider state ─────────────────────────────────────
@@ -54,91 +55,6 @@ const SLIDER_EXTEND   = 600;  // extend by 10 minutes when reached
 let sliderDragging = false;
 let audioSliderDragging = false;
 
-/**
- * Build audio/mod track config for the shader tuner panel.
- * Loads both mod and audio folder indexes so the user can switch
- * between track types via the Type selector in the tuner.
- */
-async function buildAudioConfig(annotations, baseUrl) {
-  if (!mediaLoader.hasAudio) return null;
-  const currentType = mediaLoader.audioType;  // 'audio' | 'mod'
-  const ann = annotations.find(a => a.type === 'audio' || a.type === 'mod');
-  if (!ann) return null;
-
-  // Derive the folder path from the annotation (e.g. "../../media/mod/song.mod" → "../../media/mod/")
-  const lastSlash = ann.path.lastIndexOf('/');
-  const folder = lastSlash >= 0 ? ann.path.substring(0, lastSlash + 1) : '';
-
-  // Derive both mod and audio folder paths
-  const modFolder = currentType === 'mod' ? folder : folder.replace(/audio\/$/, 'mod/');
-  const audioFolder = currentType === 'audio' ? folder : folder.replace(/mod\/$/, 'audio/');
-
-  async function loadIndex(folderPath) {
-    try {
-      const indexUrl = new URL(folderPath + 'index.js', baseUrl).href;
-      const mod = await import(indexUrl);
-      return mod.default || [];
-    } catch (e) {
-      console.warn('Could not load media index:', folderPath, e);
-      return [];
-    }
-  }
-
-  function buildTracks(files, folderPath) {
-    return files.map(f => ({
-      label: f.replace(/\.[^.]+$/, ''),
-      file: f,
-      url: new URL((folderPath + f).replace(/#/g, '%23'), baseUrl).href,
-    }));
-  }
-
-  const [modFiles, audioFiles] = await Promise.all([
-    loadIndex(modFolder),
-    loadIndex(audioFolder),
-  ]);
-
-  const modTracks = buildTracks(modFiles, modFolder);
-  const audioTracks = buildTracks(audioFiles, audioFolder);
-  const currentUrl = new URL(ann.path.replace(/#/g, '%23'), baseUrl).href;
-
-  return {
-    modTracks,
-    audioTracks,
-    defaultType: currentType,
-    currentUrl,
-    onSwitch: (url, file) => {
-      if (currentType === 'mod') {
-        mediaLoader.switchModSource(url);
-      } else {
-        mediaLoader.switchAudioSource(url);
-      }
-      const src = editor.getValue();
-      const activeFolder = currentType === 'mod' ? modFolder : audioFolder;
-      const newPath = activeFolder + file;
-      const re = new RegExp(
-        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod))',
-      );
-      const updated = src.replace(re, `$1"${newPath}"$2`);
-      if (updated !== src) editor.setValue(updated);
-    },
-    onSwitchType: (newType) => {
-      const tracks = newType === 'mod' ? modTracks : audioTracks;
-      if (tracks.length === 0) return;
-      const targetFolder = newType === 'mod' ? modFolder : audioFolder;
-      const newPath = targetFolder + tracks[0].file;
-      const src = editor.getValue();
-      const re = new RegExp(
-        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)\\s+(?:audio|mod)',
-      );
-      const updated = src.replace(re, `$1"${newPath}" ${newType}`);
-      if (updated !== src) {
-        editor.setValue(updated);
-        applyShader(updated, true);
-      }
-    },
-  };
-}
-
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
 const mediaLoader = new MediaLoader();
@@ -146,21 +62,22 @@ const gpuAudio = new GpuAudio();
 renderer.mediaLoader = mediaLoader;
 function fpsHandler(fps) {
   fpsDisplay.textContent = fps + " FPS";
-  const t = activeRenderer().getTime();
+  const pw = popout ? popout.win : null;
+  const t = (popout ? popout.activeRenderer() : renderer).getTime();
   const mins = Math.floor(t / 60);
   const secs = Math.floor(t % 60);
   const timeStr =
     String(mins).padStart(2, "0") + ":" +
     String(secs).padStart(2, "0");
   timeDisplay.textContent = timeStr;
-  const activeCanvas = activeRenderer().canvas;
+  const activeCanvas = (popout ? popout.activeRenderer() : renderer).canvas;
   const resStr = activeCanvas.width + "\xD7" + activeCanvas.height;
   resDisplay.textContent = resStr;
   // Mirror to pop-out
-  if (popoutWin && !popoutWin.closed && popoutWin._fpsEl) {
-    popoutWin._fpsEl.textContent = fps + " FPS";
-    popoutWin._timeEl.textContent = timeStr;
-    if (popoutWin._resEl) popoutWin._resEl.textContent = resStr;
+  if (pw && !pw.closed && pw._fpsEl) {
+    pw._fpsEl.textContent = fps + " FPS";
+    pw._timeEl.textContent = timeStr;
+    if (pw._resEl) pw._resEl.textContent = resStr;
   }
 }
 renderer.onFps = fpsHandler;
@@ -240,113 +157,9 @@ initSplitter(
 btnApply.addEventListener("click", () => applyShader(editor.getValue()));
 
 // ── Shadertoy export ──────────────────────────────────────
-
-/** Convert a single chunk of playground GLSL to Shadertoy conventions. */
-function convertChunk(src) {
-  let out = src;
-
-  // Convert @lil-gui const block → #define (before other replacements)
-  out = out.replace(
-    /\/\/\s*@lil-gui-start\n([\s\S]*?)\/\/\s*@lil-gui-end/g,
-    (_, block) => block.split('\n').map(line => {
-      const m = line.match(/^\s*const\s+\S+\s+(\w+)\s*=\s*([^;]+);/);
-      return m ? `#define ${m[1]} ${m[2].trim()}` : line;
-    }).join('\n')
-  );
-
-  // Remove WebGL1-specific declarations
-  out = out.replace(/^#extension\s+GL_OES_standard_derivatives\s*:\s*\w+\s*\n/m, '');
-  out = out.replace(/^precision\s+\w+\s+\w+;\s*\n/m, '');
-  out = out.replace(/^uniform\s+vec2\s+u_resolution;[^\n]*\n/m, '');
-  out = out.replace(/^uniform\s+float\s+u_time;[^\n]*\n/m, '');
-  out = out.replace(/^uniform\s+sampler2D\s+u_channel\d+;[^\n]*\n/gm, '');
-
-  // Replace playground uniforms with Shadertoy builtins
-  out = out.replace(/\bu_time\b/g, 'iTime');
-  out = out.replace(/\bu_resolution\b/g, 'iResolution.xy');
-  out = out.replace(/\bu_channel0\b/g, 'iChannel0');
-  out = out.replace(/\bu_channel1\b/g, 'iChannel1');
-
-  // WebGL 1 → WebGL 2 (Shadertoy uses GLSL ES 3.0)
-  out = out.replace(/\btexture2D\b/g, 'texture');
-
-  // Replace GLSL ES output with Shadertoy conventions
-  out = out.replace(/\bgl_FragCoord\.xy\b/g, 'fragCoord');
-  out = out.replace(/\bgl_FragCoord\b/g, 'fragCoord');
-  out = out.replace(/\bgl_FragColor\b/g, 'fragColor');
-  out = out.replace(/\bvoid\s+main\s*\(\s*\)/g, 'void mainImage(out vec4 fragColor, in vec2 fragCoord)');
-
-  return out;
-}
-
-/** Split source at // @pass markers (mirrors renderer._parsePasses logic). */
-function splitPasses(src) {
-  const passRe = /^\/\/\s*@pass\s+(\w+)(?:\s+size=([\w.]+),([\w.]+))?/;
-  const lines = src.split('\n');
-  const preamble = [];
-  const passes = [];
-  let cur = null;
-
-  for (const line of lines) {
-    const m = line.match(passRe);
-    if (m) {
-      if (cur) passes.push(cur);
-      cur = { name: m[1], sizeTag: m[0], body: [] };
-    } else if (cur) {
-      cur.body.push(line);
-    } else {
-      preamble.push(line);
-    }
-  }
-  if (cur) passes.push(cur);
-  if (passes.length === 0) return null; // single-pass shader
-  return { preamble: preamble.join('\n'), passes };
-}
-
-const BUFFER_NAMES = ['Buffer A', 'Buffer B', 'Buffer C', 'Buffer D'];
-
-/**
- * Convert playground GLSL to Shadertoy-compatible code.
- * Async because it resolves @include directives via fetch.
- */
-async function toShadertoy(src) {
-  // 1. Resolve @include directives (inline library files)
-  let resolved = await resolveForCurrent(src);
-
-  // 2. Check for multipass
-  const mp = splitPasses(resolved);
-
-  if (!mp) {
-    // Single-pass: straightforward conversion
-    return convertChunk(resolved);
-  }
-
-  // Multipass: emit labelled sections
-  const sections = [];
-  const last = mp.passes.length - 1;
-
-  for (let i = 0; i < mp.passes.length; i++) {
-    const p = mp.passes[i];
-    const full = mp.preamble + '\n' + p.body.join('\n');
-    const converted = convertChunk(full);
-    const label = i < last ? BUFFER_NAMES[i] || `Buffer ${i}` : 'Image';
-    sections.push(
-      `// ${'═'.repeat(60)}\n` +
-      `// ══  Paste into Shadertoy tab: ${label}\n` +
-      (i < last
-        ? `// ══  Set ${BUFFER_NAMES[i] || 'Buffer ' + i} as iChannel0 on the next tab\n`
-        : '') +
-      `// ${'═'.repeat(60)}\n\n` +
-      converted
-    );
-  }
-
-  return sections.join('\n\n');
-}
-
 btnShadertoy.addEventListener("click", async () => {
   try {
-    const shadertoyCode = await toShadertoy(editor.getValue());
+    const shadertoyCode = await toShadertoy(editor.getValue(), src => resolveForPath(src, currentPath));
     await navigator.clipboard.writeText(shadertoyCode);
     const orig = btnShadertoy.textContent;
     btnShadertoy.textContent = '✓';
@@ -431,16 +244,14 @@ btnDebug.addEventListener("click", () => {
   debugVisible = !debugVisible;
   btnDebug.classList.toggle("active", debugVisible);
   debugBox.classList.toggle("hidden", !debugVisible);
-  if (popoutWin && !popoutWin.closed && popoutWin._debugBox) {
-    popoutWin._debugBox.style.display = debugVisible ? "" : "none";
-  }
+  popout.syncDebug(debugVisible);
 });
 
 btnPopout.addEventListener("click", () => {
-  if (popoutWin && !popoutWin.closed) {
-    closePopout();
+  if (popout.win && !popout.win.closed) {
+    popout.close();
   } else {
-    openPopout();
+    popout.open(debugVisible);
   }
 });
 
@@ -452,9 +263,9 @@ const tuner = new ShaderTuner(
     editor.setValue(source);
     if (currentName) sidebar.saveToCustom(currentName, source);
     let resolved;
-    try { resolved = await resolveForCurrent(source); }
+    try { resolved = await resolveForPath(source, currentPath); }
     catch (e) { showError(String(e)); return; }
-    resolved = injectChannelUniforms(resolved);
+    resolved = injectChannelUniforms(resolved, mediaLoader);
     const err = activeRenderer().compile(resolved, true);
     if (err) showError(err); else hideError();
   },
@@ -558,7 +369,7 @@ btnSave.addEventListener("click", () => {
   }
   // brief visual feedback
   const orig = btnSave.textContent;
-  btnSave.textContent = 'check';
+  btnSave.textContent = 'check_circle';
   setTimeout(() => { btnSave.textContent = orig; }, 1000);
 });
 
@@ -641,50 +452,10 @@ async function loadShader(path) {
 // ── Active renderer helper ────────────────────────────────
 
 function activeRenderer() {
-  return (popoutWin && !popoutWin.closed && popoutWin._renderer)
-    ? popoutWin._renderer
-    : renderer;
+  return popout ? popout.activeRenderer() : renderer;
 }
 
 // ── Apply / compile ───────────────────────────────────────
-
-/**
- * Resolves // @include <path> directives by fetching and inlining each file.
- * @param {string} src      Raw shader source
- * @param {string} baseUrl  Absolute URL used to resolve relative include paths
- */
-async function resolveIncludes(src, baseUrl) {
-  const includeRe = /^\s*\/\/\s*@include\s+(\S+)/;
-  const lines = src.split('\n');
-  const resolved = await Promise.all(lines.map(async line => {
-    const m = line.match(includeRe);
-    if (!m) return line;
-    const url = new URL(m[1], baseUrl).href;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`@include ${m[1]}: HTTP ${res.status}`);
-    const text = await res.text();
-    // Recursively resolve nested includes relative to the included file
-    return resolveIncludes(text, url);
-  }));
-  return resolved.join('\n');
-}
-
-/** Resolve @include paths relative to the currently loaded shader. */
-async function resolveForCurrent(source) {
-  const baseUrl = currentPath
-    ? new URL(currentPath, window.location.href).href
-    : window.location.href;
-  return resolveIncludes(source, baseUrl);
-}
-
-/** Inject uniform sampler2D declarations for any active media channels. */
-function injectChannelUniforms(resolved) {
-  const chans = new Set(mediaLoader.hasMedia ? [...mediaLoader.channels.keys()] : []);
-  if (chans.size === 0) return resolved;
-  const decls = [...chans].sort()
-    .map(c => `uniform sampler2D u_channel${c};`).join('\n');
-  return resolved.replace(/(precision\s+\S+\s+\S+;)/, `$1\n${decls}`);
-}
 
 async function applyShader(source, focusTuner) {
   // Save to custom storage if editing a custom shader
@@ -728,17 +499,22 @@ async function applyShader(source, focusTuner) {
   audioControls.classList.toggle("hidden", !hasAudio);
 
   // Set audio config for tuner panel
-  tuner.setAudioConfig(hasAudio ? await buildAudioConfig(mediaAnns, baseUrl) : null);
+  tuner.setAudioConfig(hasAudio ? await buildAudioConfig(mediaAnns, baseUrl, {
+    mediaLoader,
+    getSource: () => editor.getValue(),
+    setSource: (s) => editor.setValue(s),
+    applyShader,
+  }) : null);
 
   let resolved;
   try {
-    resolved = await resolveForCurrent(source);
+    resolved = await resolveForPath(source, currentPath);
   } catch (e) {
     showError(String(e));
     return;
   }
 
-  resolved = injectChannelUniforms(resolved);
+  resolved = injectChannelUniforms(resolved, mediaLoader);
 
   const err = activeRenderer().compile(resolved);
   if (err) {
@@ -774,11 +550,21 @@ function hideError() {
 
 // ── Pop-out preview ───────────────────────────────────────
 
-const previewPane = document.getElementById("preview-pane");
-const editorPane  = document.getElementById("editor-pane");
-const hsplit = document.getElementById("hsplit");
-let _savedEditorFlex = "";
-let _savedEditorHeight = "";
+const popout = new PopoutManager({
+  renderer,
+  Renderer,
+  mediaLoader,
+  editor,
+  fpsHandler,
+  btnPopout,
+  previewPane: document.getElementById("preview-pane"),
+  editorPane:  document.getElementById("editor-pane"),
+  hsplit:      document.getElementById("hsplit"),
+  compileSource: async (r) => {
+    const src = await resolveForPath(editor.getValue(), currentPath);
+    r.compile(injectChannelUniforms(src, mediaLoader));
+  },
+});
 
 // ── Download custom shaders as ZIP ────────────────────────
 let jsZipPromise;
@@ -808,93 +594,9 @@ async function downloadCustomShaders() {
   URL.revokeObjectURL(url);
 }
 
-function openPopout() {
-  if (popoutWin && !popoutWin.closed) return;
-
-  // Stop embedded rendering
-  renderer.stop();
-  previewPane.style.display = "none";
-  hsplit.style.display = "none";
-  // Let editor fill the full height
-  _savedEditorFlex = editorPane.style.flex;
-  _savedEditorHeight = editorPane.style.height;
-  editorPane.style.flex = "1";
-  editorPane.style.height = "";
-  btnPopout.classList.add("active");
-  editor.layout();
-
-  popoutWin = window.open("", "shader_preview", "width=800,height=600");
-  const doc = popoutWin.document;
-  doc.title = "Shader Preview";
-  doc.body.style.cssText = "margin:0;background:#000;overflow:hidden";
-
-  // Debug overlay
-  const dbg = doc.createElement("div");
-  dbg.id = "debug-box";
-  dbg.style.cssText = "position:fixed;top:8px;right:8px;background:rgba(0,0,0,0.65);color:#0f0;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;z-index:5;pointer-events:none;display:none";
-  const fpsEl = doc.createElement("div");
-  const timeEl = doc.createElement("div");
-  const resEl = doc.createElement("div");
-  dbg.appendChild(fpsEl);
-  dbg.appendChild(timeEl);
-  dbg.appendChild(resEl);
-  doc.body.appendChild(dbg);
-  popoutWin._debugBox = dbg;
-  popoutWin._fpsEl = fpsEl;
-  popoutWin._timeEl = timeEl;
-  popoutWin._resEl = resEl;
-  // Sync current debug visibility
-  dbg.style.display = debugVisible ? "" : "none";
-
-  const c = doc.createElement("canvas");
-  c.style.cssText = "display:block;width:100%;height:100%";
-  doc.body.appendChild(c);
-
-  const r = new Renderer(c);
-  popoutWin._renderer = r;
-  r.mediaLoader = mediaLoader;
-  r.onFps = fpsHandler;
-  resolveForCurrent(editor.getValue()).then(src => r.compile(injectChannelUniforms(src)));
-  // Sync pause state
-  if (renderer.paused) r.togglePause();
-  r.start();
-
-  // Poll to detect the pop-out being closed (beforeunload is unreliable)
-  popoutPoll = setInterval(() => {
-    if (!popoutWin || popoutWin.closed) {
-      clearInterval(popoutPoll);
-      popoutPoll = null;
-      btnPopout.classList.remove("active");
-      restoreEmbedded();
-      popoutWin = null;
-    }
-  }, 300);
-}
-
-function closePopout() {
-  if (popoutPoll) { clearInterval(popoutPoll); popoutPoll = null; }
-  if (popoutWin && !popoutWin.closed) popoutWin.close();
-  popoutWin = null;
-  btnPopout.classList.remove("active");
-  restoreEmbedded();
-}
-
-function restoreEmbedded() {
-  previewPane.style.display = "";
-  hsplit.style.display = "";
-  editorPane.style.flex = _savedEditorFlex;
-  editorPane.style.height = _savedEditorHeight;
-  // Recompile current source into embedded renderer so it's in sync
-  resolveForCurrent(editor.getValue()).then(src => { renderer.compile(injectChannelUniforms(src)); renderer.start(); });
-  editor.layout();
-}
-
 // ── Boot ──────────────────────────────────────────────────
 
-// Close pop-out when the main window unloads (reload / close)
-window.addEventListener("beforeunload", () => {
-  if (popoutWin && !popoutWin.closed) popoutWin.close();
-});
+window.addEventListener("beforeunload", () => popout.destroy());
 
 // Check for ?shader= query parameter first, then fall back to localStorage
 {
