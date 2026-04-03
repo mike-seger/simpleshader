@@ -38,7 +38,6 @@ const SHADER_INDEX = [
       { name: "Colourful Reactive Ribbons", path: "web/shaders/shadertoy/colourful-reactive-ribbons.glsl" },
       { name: "Creation By Silexars", path: "web/shaders/shadertoy/creation-by-silexars.glsl" },
       { name: "Cyberspace Data Warehouse Ar", path: "web/shaders/shadertoy/cyberspace-data-warehouse-ar.glsl" },
-      { name: "Cyberspace Data Warehouse", path: "web/shaders/shadertoy/cyberspace-data-warehouse.glsl" },
       { name: "Disco Sun Vortex", path: "web/shaders/shadertoy/disco-sun-vortex.glsl" },
       { name: "Floating Ribbons", path: "web/shaders/shadertoy/floating-ribbons.glsl" },
       { name: "Flowing Ribbons", path: "web/shaders/shadertoy/flowing-ribbons.glsl" },
@@ -54,6 +53,16 @@ const SHADER_INDEX = [
       { name: "Turbulent Star", path: "web/shaders/shadertoy/turbulent-star.glsl" },
       { name: "Vertical Ribbon", path: "web/shaders/shadertoy/vertical-ribbon.glsl" },
       { name: "Year Of Truchets 038", path: "web/shaders/shadertoy/year-of-truchets-038.glsl" },
+    ],
+  },
+  {
+    folder: "shadertoy-gpu-audio",
+    shaders: [
+      { name: "Audio Library Test+visual", path: "web/shaders/shadertoy-gpu-audio/audio-library-test+visual.glsl" },
+      { name: "Frozen Wasteland", path: "web/shaders/shadertoy-gpu-audio/frozen-wasteland.glsl" },
+      { name: "Sound Acid Jam", path: "web/shaders/shadertoy-gpu-audio/sound-acid-jam.glsl" },
+      { name: "Stardust", path: "web/shaders/shadertoy-gpu-audio/stardust.glsl" },
+      { name: "Xyptonjtroz", path: "web/shaders/shadertoy-gpu-audio/xyptonjtroz.glsl" },
     ],
   },
   {

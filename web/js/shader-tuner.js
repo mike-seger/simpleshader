@@ -235,21 +235,42 @@ export default class ShaderTuner {
     this._gui.title("Controls");
     this._proxyObj = {};
 
-    // Audio track selector (if audio is active)
+    // Audio/MOD track selector (if audio is active)
     if (hasAudio) {
       const ac = this._audioConfig;
       const trackMap = {};
-      for (const t of ac.tracks) trackMap[t.label] = t.url;
+      const fileMap = {};
+      for (const t of ac.tracks) {
+        trackMap[t.label] = t.url;
+        fileMap[t.label] = t.file;
+      }
       // Find current label
       const cur = ac.tracks.find(t => t.url === ac.currentUrl);
       this._proxyObj.__audioTrack = cur ? cur.label : ac.tracks[0].label;
-      const folder = this._gui.addFolder("Audio");
-      folder.add(this._proxyObj, "__audioTrack", Object.keys(trackMap))
+      const folderTitle = ac.mediaType === 'mod' ? 'MOD Tracks' : 'Audio';
+      const folder = this._gui.addFolder(folderTitle);
+      const trackCtrl = folder.add(this._proxyObj, "__audioTrack", Object.keys(trackMap))
         .name("Track")
         .onChange((label) => {
           const url = trackMap[label];
-          if (url) ac.onSwitch(url);
+          const file = fileMap[label];
+          if (url) ac.onSwitch(url, file);
         });
+
+      // Left/right arrow keys cycle through tracks
+      const selectEl = trackCtrl.$widget.querySelector('select');
+      if (selectEl) {
+        selectEl.addEventListener('keydown', (e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const opts = Array.from(selectEl.options);
+          let idx = selectEl.selectedIndex;
+          if (e.key === 'ArrowLeft')  idx = (idx - 1 + opts.length) % opts.length;
+          if (e.key === 'ArrowRight') idx = (idx + 1) % opts.length;
+          selectEl.selectedIndex = idx;
+          selectEl.dispatchEvent(new Event('change'));
+        });
+      }
     }
 
     if (this._parsed.length === 0) return true;

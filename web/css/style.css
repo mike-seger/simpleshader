@@ -117,7 +117,7 @@ body {
 .tree-folder.collapsed .arrow { transform: rotate(-90deg); }
 .tree-folder.collapsed .tree-children { display: none; }
 
-.tree-children { padding-left: 8px; }
+.tree-children { padding-left: 0; }
 .tree-item {
   display: block;
   padding: 4px 12px 4px 30px;
@@ -352,6 +352,20 @@ body {
 #tuner-container .lil-gui { --width: 100%; width: 100% !important; }
 #tuner-container .lil-gui.root { width: 100% !important; }
 #tuner-container > .lil-gui > .title { display: none; }
+/* Auto-width labels: short names stay narrow, long names expand */
+#tuner-container .lil-gui .controller > .name {
+  width: auto !important;
+  flex: 0 0 auto !important;
+  min-width: 20%;
+  padding-right: 5px;
+}
+#tuner-container .lil-gui .controller > .widget {
+  flex: 1 1 0 !important;
+  min-width: 0;
+}
+#tuner-container .lil-gui .controller > .widget select {
+  width: 100% !important;
+}
 
 /* Shader action icons visible only when list panel is open */
 body:not(.panel-list) .sb-shader-action { display: none !important; }

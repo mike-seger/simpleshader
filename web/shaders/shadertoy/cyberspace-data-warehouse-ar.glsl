@@ -8,7 +8,7 @@ precision highp float;
 // and Inigo Quilez (iq) for  https://iquilezles.org/www/index.htm
 // and whole Shadertoy community for inspiration.
 
-// @iChannel0 "../../media/audio/01 - Perpetual Overload.mp3"  audio
+// @iChannel0 "../../media/mod/## oldskull ## 6ch.mod" mod
 
 uniform vec2 u_resolution;
 uniform float u_time;

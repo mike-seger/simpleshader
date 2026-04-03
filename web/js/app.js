@@ -9,6 +9,7 @@ import { initSplitter } from "./splitter.js";
 import { upsertCustomShader, loadCustomShaders } from "./store.js";
 import ShaderTuner from "./shader-tuner.js";
 import { MediaLoader, parseMediaAnnotations } from "./media-loader.js";
+import GpuAudio, { parseGpuAudioAnnotation } from "./gpu-audio.js";
 
 // ── DOM refs ──────────────────────────────────────────────
 const canvas        = document.getElementById("glcanvas");
@@ -52,38 +53,70 @@ const SLIDER_EXTEND   = 600;  // extend by 10 minutes when reached
 let sliderDragging = false;
 let audioSliderDragging = false;
 
-// ── Available audio tracks ────────────────────────────────
-const AUDIO_TRACKS = [
-  "01 - Perpetual Overload.mp3",
-  "06 - 3 Body Problem.mp3",
-  "08 - Industrial Dreams.mp3",
-  "12 - Between The Worlds.mp3",
-  "17 - Neural Networks.mp3",
-  "18 - Sounds Of Infinity.mp3",
-];
-const AUDIO_BASE_PATH = "web/media/audio/";
-
-/** Build audio track config for the shader tuner panel. */
-function buildAudioConfig() {
+/**
+ * Build audio/mod track config for the shader tuner panel.
+ * Detects the media folder from the first audio/mod annotation,
+ * loads the folder index dynamically, and builds a track list.
+ */
+async function buildAudioConfig(annotations, baseUrl) {
   if (!mediaLoader.hasAudio) return null;
-  // Find current track from the audio element's src
-  const state = mediaLoader.getAudioState();
-  const audioEl = mediaLoader._audioElements[0];
-  const currentSrc = audioEl ? audioEl.src : "";
-  const tracks = AUDIO_TRACKS.map(f => ({
-    label: f.replace(/\.mp3$/i, ""),
-    url: new URL(AUDIO_BASE_PATH + f, window.location.href).href,
+  const audioType = mediaLoader.audioType;  // 'audio' | 'mod'
+  const ann = annotations.find(a => a.type === audioType);
+  if (!ann) return null;
+
+  // Derive the folder path from the annotation (e.g. "../../media/mod/song.mod" → "../../media/mod/")
+  const lastSlash = ann.path.lastIndexOf('/');
+  const folder = lastSlash >= 0 ? ann.path.substring(0, lastSlash + 1) : '';
+  const currentFile = lastSlash >= 0 ? ann.path.substring(lastSlash + 1) : ann.path;
+
+  // Load the folder index
+  let fileList = [];
+  try {
+    const indexUrl = new URL(folder + 'index.js', baseUrl).href;
+    const mod = await import(indexUrl);
+    fileList = mod.default || [];
+  } catch (e) {
+    console.warn('Could not load media index:', e);
+    fileList = [currentFile];
+  }
+
+  const tracks = fileList.map(f => ({
+    label: f.replace(/\.[^.]+$/, ''),  // strip extension
+    file: f,
+    url: new URL((folder + f).replace(/#/g, '%23'), baseUrl).href,
   }));
+
+  const currentUrl = new URL((ann.path).replace(/#/g, '%23'), baseUrl).href;
+
   return {
     tracks,
-    currentUrl: currentSrc,
-    onSwitch: (url) => mediaLoader.switchAudioSource(url),
+    currentUrl,
+    mediaType: audioType,
+    annotationPath: ann.path,
+    folder,
+    onSwitch: (url, file) => {
+      if (audioType === 'mod') {
+        mediaLoader.switchModSource(url);
+      } else {
+        mediaLoader.switchAudioSource(url);
+      }
+      // Rewrite the @iChannel annotation in the editor source
+      const src = editor.getValue();
+      const typeTag = audioType === 'mod' ? ' mod' : ' audio';
+      const newPath = folder + file;
+      const re = new RegExp(
+        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod))',
+      );
+      const updated = src.replace(re, `$1"${newPath}"$2`);
+      if (updated !== src) editor.setValue(updated);
+    },
   };
 }
 
 // ── Renderer ──────────────────────────────────────────────
 const renderer = new Renderer(canvas);
 const mediaLoader = new MediaLoader();
+const gpuAudio = new GpuAudio();
 renderer.mediaLoader = mediaLoader;
 function fpsHandler(fps) {
   fpsDisplay.textContent = fps + " FPS";
@@ -115,6 +148,7 @@ document.addEventListener("click", () => {
   if (mediaLoader._audioCtx && mediaLoader._audioCtx.state === 'suspended') {
     mediaLoader._audioCtx.resume();
   }
+  gpuAudio.resumeContext();
 });
 
 // Update toolbar time + slider at 10 Hz
@@ -145,7 +179,9 @@ setInterval(() => {
     timeSlider.value = t;
   }
   // Audio slider update
-  const as = mediaLoader.getAudioState();
+  const as = mediaLoader.audioType === 'mod' ? mediaLoader.getModState()
+           : gpuAudio.hasAudio ? gpuAudio.getState()
+           : mediaLoader.getAudioState();
   if (as && !audioSliderDragging) {
     audioSlider.max = String(as.duration || 100);
     audioSlider.value = String(as.currentTime);
@@ -303,10 +339,15 @@ document.addEventListener("pointerup", () => {
   audioSliderDragging = false;
 });
 timeSlider.addEventListener("input", () => {
-  activeRenderer().seekTo(parseFloat(timeSlider.value));
+  const t = parseFloat(timeSlider.value);
+  activeRenderer().seekTo(t);
+  if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(t);
+  else if (gpuAudio.hasAudio) gpuAudio.seekTo(t);
 });
 btnResetTime.addEventListener("click", () => {
   activeRenderer().seekTo(0);
+  if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(0);
+  else if (gpuAudio.hasAudio) gpuAudio.seekTo(0);
   timeSlider.max = String(SLIDER_INIT_MAX);
   timeSlider.value = "0";
   toolbarTime.textContent = "00:00.00";
@@ -315,11 +356,19 @@ btnResetTime.addEventListener("click", () => {
 // ── Audio slider ──────────────────────────────────────────
 audioSlider.addEventListener("pointerdown", () => { audioSliderDragging = true; });
 audioSlider.addEventListener("input", () => {
-  mediaLoader.seekAudio(parseFloat(audioSlider.value));
+  if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(parseFloat(audioSlider.value));
+  else if (gpuAudio.hasAudio) gpuAudio.seekTo(parseFloat(audioSlider.value));
+  else mediaLoader.seekAudio(parseFloat(audioSlider.value));
 });
 
 btnAudioPlayPause.addEventListener("click", () => {
-  if (mediaLoader.audioPlaying) {
+  if (mediaLoader.audioType === 'mod') {
+    if (mediaLoader.modPlaying) { mediaLoader.pauseMod(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { mediaLoader.resumeMod(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (gpuAudio.hasAudio) {
+    if (gpuAudio.playing) { gpuAudio.pause(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { gpuAudio.resume(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (mediaLoader.audioPlaying) {
     mediaLoader.pauseAudio();
     btnAudioPlayPause.textContent = "play_arrow";
   } else {
@@ -334,7 +383,13 @@ btnPlayPause.addEventListener("click", () => {
   btnPlayPause.textContent = r.paused ? "play_arrow" : "pause";
   localStorage.setItem("simpleshader_paused", r.paused ? "1" : "0");
   // Sync audio playback with renderer pause state
-  if (mediaLoader.hasAudio) {
+  if (mediaLoader.audioType === 'mod') {
+    if (r.paused) { mediaLoader.pauseMod(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { mediaLoader.resumeMod(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (gpuAudio.hasAudio) {
+    if (r.paused) { gpuAudio.pause(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { gpuAudio.resume(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (mediaLoader.hasAudio) {
     if (r.paused) {
       mediaLoader.pauseAudio();
       btnAudioPlayPause.textContent = "play_arrow";
@@ -546,8 +601,9 @@ async function resolveForCurrent(source) {
 
 /** Inject uniform sampler2D declarations for any active media channels. */
 function injectChannelUniforms(resolved) {
-  if (!mediaLoader.hasMedia) return resolved;
-  const decls = [...mediaLoader.channels.keys()]
+  const chans = new Set(mediaLoader.hasMedia ? [...mediaLoader.channels.keys()] : []);
+  if (chans.size === 0) return resolved;
+  const decls = [...chans].sort()
     .map(c => `uniform sampler2D u_channel${c};`).join('\n');
   return resolved.replace(/(precision\s+\S+\s+\S+;)/, `$1\n${decls}`);
 }
@@ -572,12 +628,29 @@ async function applyShader(source) {
   // Assign to active renderer
   activeRenderer().mediaLoader = mediaLoader;
 
+  // Parse and load @gpu-audio annotation
+  const gpuAudioAnn = parseGpuAudioAnnotation(source);
+  if (gpuAudioAnn) {
+    try {
+      const soundUrl = new URL(gpuAudioAnn.path, baseUrl).href;
+      const soundRes = await fetch(soundUrl);
+      if (!soundRes.ok) throw new Error(`HTTP ${soundRes.status}`);
+      const soundSrc = await soundRes.text();
+      await gpuAudio.load(soundSrc, 44100, gpuAudioAnn.duration);
+    } catch (e) {
+      console.warn('GPU audio load failed:', e);
+      gpuAudio.dispose();
+    }
+  } else {
+    gpuAudio.dispose();
+  }
+
   // Show/hide audio toolbar controls
-  const hasAudio = mediaLoader.hasAudio;
+  const hasAudio = mediaLoader.hasAudio || gpuAudio.hasAudio;
   audioControls.classList.toggle("hidden", !hasAudio);
 
   // Set audio config for tuner panel
-  tuner.setAudioConfig(hasAudio ? buildAudioConfig() : null);
+  tuner.setAudioConfig(hasAudio ? await buildAudioConfig(mediaAnns, baseUrl) : null);
 
   let resolved;
   try {

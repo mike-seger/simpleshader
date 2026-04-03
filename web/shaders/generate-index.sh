@@ -24,7 +24,7 @@ EOF
 
   for dir in $(find . -mindepth 1 -maxdepth 1 -type d | grep -v '^\./lib$' | sort); do
     folder=${dir#./}
-    files=$(find "$dir" -maxdepth 1 -type f -name '*.glsl' | sort)
+    files=$(find "$dir" -maxdepth 1 -type f -name '*.glsl'| grep -v -- '-sound.glsl$'  |sort)
     [ -n "$files" ] || continue
 
     cat <<EOF

@@ -1,14 +1,22 @@
 /**
- * Media loader — parses @iChannel annotations and loads textures / audio FFT.
+ * Media loader — parses @iChannel annotations and loads textures / audio / MOD.
  *
  * Shader annotation syntax:
  *   // @iChannel0 path/to/image.jpg          — static image texture
  *   // @iChannel1 path/to/audio.mp3  audio   — audio FFT texture (256×2)
+ *   // @iChannel0 path/to/song.mod   mod     — MOD/XM/S3M/IT tracker via chiptune3
  *
  * Paths are resolved relative to the shader file URL.
- * Audio channels produce a 256×2 LUMINANCE texture updated every frame
+ * Audio/mod channels produce a 256×2 LUMINANCE texture updated every frame
  * (row 0 = frequency data, row 1 = waveform), similar to Shadertoy.
  */
+
+const CHIPTUNE_CDN = "https://cdn.jsdelivr.net/npm/chiptune3@0.8/chiptune3.js";
+let chiptuneModule = null;
+async function loadChiptuneLib() {
+  if (!chiptuneModule) chiptuneModule = await import(CHIPTUNE_CDN);
+  return chiptuneModule;
+}
 
 /**
  * Parse @iChannel annotations from shader source.
@@ -16,14 +24,14 @@
  * @returns {Array<{channel: number, path: string, type: 'image'|'audio'}>}
  */
 export function parseMediaAnnotations(src) {
-  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio))?\s*$/gm;
+  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod))?\s*$/gm;
   const results = [];
   let m;
   while ((m = re.exec(src)) !== null) {
     results.push({
       channel: parseInt(m[1], 10),
       path: m[2] || m[3],
-      type: m[4] === 'audio' ? 'audio' : 'image',
+      type: m[4] === 'audio' ? 'audio' : m[4] === 'mod' ? 'mod' : 'image',
     });
   }
   return results;
@@ -36,26 +44,33 @@ export function parseMediaAnnotations(src) {
  */
 export class MediaLoader {
   constructor() {
-    /** @type {Map<number, {type: string, analyser?: AnalyserNode, freqData?: Uint8Array, waveData?: Uint8Array, texData?: Uint8Array, img?: HTMLImageElement}>} */
+    /** @type {Map<number, {type: string, analyser?: AnalyserNode, freqData?: Uint8Array, waveData?: Uint8Array, texData?: Uint8Array, img?: HTMLImageElement, modPlayer?: any}>} */
     this.channels = new Map();
     this._audioCtx = null;
     this._audioElements = [];
+    this._modPlayers = [];     // chiptune3 player instances
     /** @type {WeakMap<WebGLRenderingContext, Map<number, WebGLTexture>>} */
     this._textures = new WeakMap();
   }
 
   /** Remove all loaded channels and free GL/audio resources. */
   dispose() {
+    // Disconnect audio graph nodes before clearing channels
+    for (const ch of this.channels.values()) {
+      if (ch.analyser) try { ch.analyser.disconnect(); } catch (_) {}
+    }
     this.channels.clear();
-    // Note: per-context textures are not explicitly deleted — they will be
-    // garbage-collected when their GL context is lost (e.g. pop-out closed).
     this._textures = new WeakMap();
     for (const el of this._audioElements) {
       el.pause();
       el.src = '';
     }
     this._audioElements = [];
-    // Don't close AudioContext — reuse it
+    for (const mp of this._modPlayers) {
+      try { mp.gain.disconnect(); } catch (_) {}
+      try { mp.stop(); } catch (_) {}
+    }
+    this._modPlayers = [];
   }
 
   /**
@@ -67,9 +82,13 @@ export class MediaLoader {
   async load(annotations, baseUrl) {
     this.dispose();
     await Promise.all(annotations.map(a => {
-      const url = new URL(a.path, baseUrl).href;
+      // Encode # as %23 before URL construction (# is the fragment delimiter)
+      const safePath = a.path.replace(/#/g, '%23');
+      const url = new URL(safePath, baseUrl).href;
       if (a.type === 'audio') {
         return this._loadAudio(a.channel, url);
+      } else if (a.type === 'mod') {
+        return this._loadMod(a.channel, url);
       }
       return this._loadImage(a.channel, url);
     }));
@@ -115,10 +134,77 @@ export class MediaLoader {
     this.channels.set(channel, { type: 'audio', analyser, freqData, waveData, texData });
   }
 
-  /** Call once per frame to capture audio FFT data (no GL operations). */
+  /** Load a MOD/XM/S3M/IT tracker file via chiptune3. */
+  async _loadMod(channel, url) {
+    if (!this._audioCtx) {
+      this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    const { ChiptuneJsPlayer } = await loadChiptuneLib();
+    const player = new ChiptuneJsPlayer({
+      context: this._audioCtx,
+      repeatCount: -1,   // loop
+    });
+
+    // Wait for AudioWorklet init
+    await new Promise((resolve, reject) => {
+      player.onInitialized(() => resolve());
+      player.onError((e) => reject(new Error('ChiptuneJs init: ' + (e?.type || e))));
+      setTimeout(() => reject(new Error('ChiptuneJs init timeout')), 10000);
+    });
+
+    // FFT analyser
+    const analyser = this._audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.8;
+    player.gain.disconnect();
+    player.gain.connect(analyser);
+    analyser.connect(this._audioCtx.destination);
+
+    const freqData = new Uint8Array(256);
+    const waveData = new Uint8Array(256);
+    const texData  = new Uint8Array(256 * 2);
+
+    // Fetch and prime the player (silent play to get metadata, then pause)
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MOD fetch failed: HTTP ${res.status}`);
+    const buffer = await res.arrayBuffer();
+
+    const metaReady = new Promise((resolve) => {
+      player.addHandler('onMetadata', () => resolve());
+      setTimeout(resolve, 5000);
+    });
+    player.gain.gain.value = 0;
+    player.play(buffer);
+    await metaReady;
+    player.pause();
+    player.gain.gain.value = 1;
+    player.setPos(0);
+
+    this._modPlayers.push(player);
+
+    // Track playback state via events
+    let currentTime = 0;
+    let duration = player.duration || 0;
+    let playing = false;
+    player.onMetadata((meta) => { duration = meta.dur || 0; });
+    player.onProgress(() => { currentTime = player.currentTime || 0; });
+    player.onEnded(() => { playing = false; });
+
+    this.channels.set(channel, {
+      type: 'mod', analyser, freqData, waveData, texData,
+      modPlayer: player, modBuffer: buffer,
+      get modPlaying() { return playing; },
+      set modPlaying(v) { playing = v; },
+      get modCurrentTime() { return currentTime; },
+      get modDuration() { return duration; },
+    });
+  }
+
+  /** Call once per frame to capture audio/mod FFT data (no GL operations). */
   updateAudio() {
     for (const ch of this.channels.values()) {
-      if (ch.type === 'audio' && ch.analyser) {
+      if ((ch.type === 'audio' || ch.type === 'mod') && ch.analyser) {
         ch.analyser.getByteFrequencyData(ch.freqData);
         ch.analyser.getByteTimeDomainData(ch.waveData);
         ch.texData.set(ch.freqData, 0);
@@ -144,7 +230,7 @@ export class MediaLoader {
       const ch = this.channels.get(channel);
       tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      if (ch.type === 'audio') {
+      if (ch.type === 'audio' || ch.type === 'mod') {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 256, 2, 0,
                       gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -175,8 +261,8 @@ export class MediaLoader {
       gl.activeTexture(gl.TEXTURE0 + unit);
       const tex = this._getTexture(gl, channel);
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      // Upload latest FFT data for audio channels
-      if (ch.type === 'audio' && ch.texData) {
+      // Upload latest FFT data for audio/mod channels
+      if ((ch.type === 'audio' || ch.type === 'mod') && ch.texData) {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 2,
                          gl.LUMINANCE, gl.UNSIGNED_BYTE, ch.texData);
       }
@@ -226,9 +312,9 @@ export class MediaLoader {
     return this.channels.size > 0;
   }
 
-  /** @returns {boolean} True if any audio channels are loaded. */
+  /** @returns {boolean} True if any audio or mod channels are loaded. */
   get hasAudio() {
-    return this._audioElements.length > 0;
+    return this._audioElements.length > 0 || this._modPlayers.length > 0;
   }
 
   /**
@@ -263,5 +349,91 @@ export class MediaLoader {
     if (wasPlaying) {
       try { await el.play(); } catch (_) { /* autoplay policy */ }
     }
+  }
+
+  /** Resume mod playback (call on user gesture to satisfy autoplay policy). */
+  resumeMod() {
+    if (this._audioCtx && this._audioCtx.state === 'suspended') {
+      this._audioCtx.resume();
+    }
+    for (const [, ch] of this.channels) {
+      if (ch.type === 'mod' && ch.modPlayer) {
+        ch.modPlayer.unpause();
+        ch.modPlaying = true;
+      }
+    }
+  }
+
+  /** Pause mod playback. */
+  pauseMod() {
+    for (const [, ch] of this.channels) {
+      if (ch.type === 'mod' && ch.modPlayer) {
+        ch.modPlayer.pause();
+        ch.modPlaying = false;
+      }
+    }
+  }
+
+  /** @returns {boolean} True if mod is currently playing. */
+  get modPlaying() {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'mod') return ch.modPlaying;
+    }
+    return false;
+  }
+
+  /** Get the first mod channel's playback state. */
+  getModState() {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'mod') {
+        return { currentTime: ch.modCurrentTime, duration: ch.modDuration };
+      }
+    }
+    return null;
+  }
+
+  /** Seek mod to a specific position (fraction 0-1). */
+  seekMod(fraction) {
+    for (const [, ch] of this.channels) {
+      if (ch.type === 'mod' && ch.modPlayer) {
+        ch.modPlayer.setPos(fraction);
+      }
+    }
+  }
+
+  /**
+   * Switch the mod source on the first mod channel.
+   * @param {string} url  Absolute URL to the new MOD file.
+   */
+  async switchModSource(url) {
+    // Find the mod channel number
+    let modChannel = -1;
+    for (const [channel, ch] of this.channels) {
+      if (ch.type === 'mod') { modChannel = channel; break; }
+    }
+    if (modChannel < 0) return;
+
+    const ch = this.channels.get(modChannel);
+    ch.modPlayer.stop();
+    ch.modPlaying = false;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MOD fetch failed: HTTP ${res.status}`);
+    const buffer = await res.arrayBuffer();
+    ch.modBuffer = buffer;
+
+    ch.modPlayer.play(buffer);
+    ch.modPlaying = true;
+  }
+
+  /**
+   * Get the media type for the first audio-like channel.
+   * @returns {'audio'|'mod'|null}
+   */
+  get audioType() {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'audio' || ch.type === 'mod') return ch.type;
+    }
+    return null;
   }
 }
