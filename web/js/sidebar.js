@@ -268,6 +268,14 @@ export default class Sidebar {
     return this._activeEl ? this._activeEl.dataset.path || null : null;
   }
 
+  getActiveDisplayName() {
+    return this._activeEl ? this._activeEl.textContent.trim() : null;
+  }
+
+  rebuild() {
+    this._rebuild();
+  }
+
   isCustomSelected() {
     return !!(this._activeEl && this._activeEl.dataset.custom);
   }

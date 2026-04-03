@@ -28,6 +28,7 @@ const btnModeTune   = document.getElementById("btn-mode-tune");
 const btnNew        = document.getElementById("btn-new");
 const btnDownload   = document.getElementById("btn-download");
 const btnDuplicate  = document.getElementById("btn-duplicate");
+const btnSave       = document.getElementById("btn-save");
 const btnDelete     = document.getElementById("btn-delete");
 const sidebarList   = document.getElementById("sidebar-list");
 const sidebarTuner  = document.getElementById("sidebar-tuner");
@@ -507,7 +508,59 @@ btnModeTune.addEventListener("click", () => {
 
 btnNew.addEventListener("click", () => sidebar.createNew());
 btnDownload.addEventListener("click", downloadCustomShaders);
-btnDuplicate.addEventListener("click", () => sidebar.duplicateSelected(editor.getValue()));
+if (btnDuplicate) btnDuplicate.addEventListener("click", () => sidebar.duplicateSelected(editor.getValue()));
+
+// ── Save button ───────────────────────────────────────────
+btnSave.addEventListener("click", () => {
+  let source = editor.getValue();
+  if (currentName) {
+    // Already a custom shader — update in place
+    sidebar.saveToCustom(currentName, source);
+  } else {
+    // Built-in shader — normalize relative @iChannel / @include paths to root-relative
+    if (currentPath) {
+      const shaderDir = currentPath.replace(/[^/]*$/, '');
+      source = source.replace(
+        /^(\s*\/\/\s*@(?:iChannel\d+|include)\s+)(?:"([^"]+)"|(\S+))/gm,
+        (match, prefix, quoted, bare) => {
+          const raw = quoted || bare;
+          if (!raw || /^https?:\/\//.test(raw)) return match;
+          // Resolve the relative path against the shader directory
+          const parts = (shaderDir + raw).split('/');
+          const resolved = [];
+          for (const p of parts) {
+            if (p === '..') resolved.pop();
+            else if (p !== '.') resolved.push(p);
+          }
+          const abs = resolved.join('/');
+          return prefix + '"' + abs + '"';
+        }
+      );
+      editor.setValue(source);
+    }
+    // Derive name from active element or path
+    let baseName = sidebar.getActiveDisplayName() || 'shader';
+    const customs = loadCustomShaders();
+    const existing = new Set(customs.map(c => c.name));
+    let name = baseName;
+    if (existing.has(name)) {
+      for (let i = 2; i <= 999; i++) {
+        const candidate = baseName + " (" + i + ")";
+        if (!existing.has(candidate)) { name = candidate; break; }
+      }
+    }
+    upsertCustomShader(name, source);
+    currentName = name;
+    currentPath = null;
+    localStorage.setItem("simpleshader_last", "custom:" + name);
+    sidebar.rebuild();
+    sidebar.selectByKey("custom:" + name);
+  }
+  // brief visual feedback
+  const orig = btnSave.textContent;
+  btnSave.textContent = 'check';
+  setTimeout(() => { btnSave.textContent = orig; }, 1000);
+});
 
 // ── Drag-and-drop import ──────────────────────────────────
 let dragCounter = 0;

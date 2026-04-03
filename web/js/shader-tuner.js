@@ -235,6 +235,7 @@ export default class ShaderTuner {
     this._gui = new GUI({ container: this._container, autoPlace: false, width: 200 });
     this._gui.title("Controls");
     this._proxyObj = {};
+    this._sliderInputs = [];
 
     // Audio/MOD track selector (if audio is active)
     if (hasAudio) {
@@ -250,15 +251,15 @@ export default class ShaderTuner {
       // Find current label
       const cur = tracks.find(t => t.url === ac.currentUrl);
       this._proxyObj.__audioTrack = cur ? cur.label : (tracks[0]?.label || '');
-      const folderTitle = currentType === 'mod' ? 'MOD Tracks' : 'Audio';
+      const folderTitle = 'Sound';
       const folder = this._gui.addFolder(folderTitle);
 
-      // Type selector (MOD / Audio)
-      this._proxyObj.__audioType = currentType === 'mod' ? 'MOD' : 'Audio';
-      const typeCtrl = folder.add(this._proxyObj, '__audioType', ['MOD', 'Audio'])
+      // Type selector (Audio file / Tracker)
+      this._proxyObj.__audioType = currentType === 'mod' ? 'Tracker: MOD/XM...' : 'Audio URL';
+      const typeCtrl = folder.add(this._proxyObj, '__audioType', ['Audio URL', 'Tracker: MOD/XM...'])
         .name('Type')
         .onChange((label) => {
-          const newType = label === 'MOD' ? 'mod' : 'audio';
+          const newType = label === 'Tracker: MOD/XM...' ? 'mod' : 'audio';
           if (newType !== currentType) ac.onSwitchType(newType);
         });
       this._enhanceSelect(typeCtrl);
@@ -372,26 +373,13 @@ export default class ShaderTuner {
       if (opts) {
         c = parent.add(this._proxyObj, p.name, opts).name(label)
           .onChange(() => { this._proxyObj[p.name] = Number(this._proxyObj[p.name]); this._apply(p); });
-        // Arrow left/right to cycle options without opening the dropdown
-        const sel = c.domElement.querySelector("select");
-        if (sel) {
-          sel.addEventListener("keydown", (e) => {
-            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-              e.preventDefault();
-              const dir = e.key === "ArrowLeft" ? -1 : 1;
-              const idx = sel.selectedIndex + dir;
-              if (idx >= 0 && idx < sel.options.length) {
-                sel.selectedIndex = idx;
-                sel.dispatchEvent(new Event("change"));
-              }
-            }
-          });
-        }
+        this._enhanceSelect(c);
       } else {
         const range = getRange(p.name, p.value, p.comment);
         c = parent.add(this._proxyObj, p.name, range.min, range.max, range.step)
           .name(label)
           .onChange(() => { if (p.type === "int") this._proxyObj[p.name] = Math.round(this._proxyObj[p.name]); this._apply(p); });
+        this._enhanceSlider(c);
       }
       if (tip) c.domElement.setAttribute("title", tip);
       return;
@@ -408,9 +396,10 @@ export default class ShaderTuner {
         .onChange(() => this._applyColor(p));
       if (tip) cc.domElement.setAttribute("title", tip);
       if (maxC > 1.0) {
-        parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
+        const bc = parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
           .name(label.replace(/Tint\d*$|Color\d*$/, "").trim() + " Bright")
           .onChange(() => this._applyColor(p));
+        this._enhanceSlider(bc);
       }
       return;
     }
@@ -428,13 +417,15 @@ export default class ShaderTuner {
         .onChange(() => this._applyColor(p));
       if (tip) cc.domElement.setAttribute("title", tip);
       if (maxC > 1.0) {
-        parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
+        const bc = parent.add(this._proxyObj, scaleKey, 0.01, maxC * 3, 0.01)
           .name(label.replace(/Color\d*$/, "").trim() + " Bright")
           .onChange(() => this._applyColor(p));
+        this._enhanceSlider(bc);
       }
       const alphaLabel = label.replace(/Color\d*$/, "Alpha").trim() || "Alpha";
-      parent.add(this._proxyObj, alphaKey, 0, 1, 0.01).name(alphaLabel)
+      const ac = parent.add(this._proxyObj, alphaKey, 0, 1, 0.01).name(alphaLabel)
         .onChange(() => this._applyColor(p));
+      this._enhanceSlider(ac);
       return;
     }
 
@@ -450,9 +441,10 @@ export default class ShaderTuner {
       const range = isDirection(p.name)
         ? { min: -10, max: 10, step: 0.1 }
         : getRange(p.name, p.value[i], p.comment);
-      folder.add(this._proxyObj, key, range.min, range.max, range.step)
+      const vc = folder.add(this._proxyObj, key, range.min, range.max, range.step)
         .name(labels[i].toUpperCase())
         .onChange(() => this._applyVec(p, dim, labels));
+      this._enhanceSlider(vc);
     }
   }
 
@@ -473,6 +465,37 @@ export default class ShaderTuner {
     ctrl.$name.style.cursor = 'pointer';
     ctrl.$name.addEventListener('click', () => selectEl.focus());
     return selectEl;
+  }
+
+  /** Enhance a slider: label-click-to-focus, left/right to adjust, up/down to navigate. */
+  _enhanceSlider(ctrl) {
+    // lil-gui renders sliders as <div class="slider"> not <input type="range">
+    const sliderEl = ctrl.$slider;
+    if (!sliderEl) return;
+    sliderEl.tabIndex = 0;
+    sliderEl.style.outline = 'none';
+    this._sliderInputs.push(sliderEl);
+    ctrl.$name.style.cursor = 'pointer';
+    ctrl.$name.addEventListener('click', () => sliderEl.focus());
+    sliderEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const step = ctrl._step || ((ctrl._max - ctrl._min) / 100);
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        const v = ctrl.getValue() + dir * step;
+        ctrl.setValue(Math.max(ctrl._min, Math.min(ctrl._max, v)));
+        return;
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const idx = this._sliderInputs.indexOf(sliderEl);
+        if (idx < 0) return;
+        const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
+        if (next >= 0 && next < this._sliderInputs.length) {
+          this._sliderInputs[next].focus();
+        }
+      }
+    });
   }
 
   /** Focus the topmost interactive control. If audio, focus the Track selector. */
@@ -521,5 +544,6 @@ export default class ShaderTuner {
     this._parsed = [];
     this._proxyObj = {};
     this._trackSelect = null;
+    this._sliderInputs = [];
   }
 }

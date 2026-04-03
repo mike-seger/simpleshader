@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Simple Shader</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="web/css/style.css">
 </head>
 <body>
@@ -15,7 +16,6 @@
       <div class="sb-separator sb-shader-action"></div>
       <button class="sb-icon sb-shader-action" id="btn-new" title="New shader">add</button>
       <button class="sb-icon sb-shader-action" id="btn-download" title="Download custom shaders">download</button>
-      <button class="sb-icon sb-shader-action" id="btn-duplicate" title="Duplicate shader">content_copy</button>
       <button class="sb-icon sb-shader-action" id="btn-delete" title="Delete custom shader">delete</button>
       <div class="sb-separator"></div>
       <button class="sb-icon" id="btn-debug" title="Toggle debug overlay">bug_report</button>
@@ -26,7 +26,7 @@
       <nav id="shader-tree"></nav>
     </div>
     <div id="sidebar-tuner" class="hidden">
-      <div class="sidebar-header">Shader Controls</div>
+      <div class="sidebar-header">Controls</div>
       <div id="tuner-container"></div>
     </div>
   </aside>
@@ -51,6 +51,7 @@
     <section id="editor-pane">
       <div id="editor-toolbar">
         <button id="btn-apply" title="Apply shader (Ctrl+Enter)">&#9650;</button>
+        <button id="btn-save" class="tb-icon" title="Save to custom shaders">save</button>
         <button id="btn-shadertoy" title="Copy as Shadertoy-compatible code">S</button>
         <button id="btn-playpause" class="tb-icon" title="Play / Pause">pause</button>
         <button id="btn-reset-time" class="tb-icon" title="Reset to 0:00">skip_previous</button>

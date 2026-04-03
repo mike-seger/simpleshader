@@ -234,7 +234,7 @@ body {
 }
 #btn-shadertoy:hover { background: #7b55b5; }
 
-#btn-playpause, #btn-reset-time, #btn-audio-playpause {
+#btn-playpause, #btn-reset-time, #btn-audio-playpause, #btn-save {
   font-family: 'Material Icons Round-Regular';
   background: #444;
   color: #fff;
@@ -247,7 +247,7 @@ body {
   min-width: 28px;
   text-align: center;
 }
-#btn-playpause:hover, #btn-reset-time:hover, #btn-audio-playpause:hover { background: #555; }
+#btn-playpause:hover, #btn-reset-time:hover, #btn-audio-playpause:hover, #btn-save:hover { background: #555; }
 
 #time-slider {
   flex: 1;
