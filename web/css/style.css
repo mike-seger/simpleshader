@@ -249,12 +249,47 @@ body {
 }
 #btn-playpause:hover, #btn-reset-time:hover, #btn-audio-playpause:hover, #btn-save:hover { background: #555; }
 
-#time-slider {
+/* ── Sliders (box-shadow elapsed fill, no JS) ── */
+#time-slider, #audio-slider {
   flex: 1;
   min-width: 60px;
-  accent-color: #007acc;
+  -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
-  height: 4px;
+  height: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: transparent;
+}
+/* Track */
+#time-slider::-webkit-slider-runnable-track,
+#audio-slider::-webkit-slider-runnable-track { background: #b7b7b7; }
+#time-slider::-moz-range-track,
+#audio-slider::-moz-range-track { background: #b7b7b7; height: 100%; }
+/* Thumb — box-shadow paints the elapsed fill */
+#time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px; border-radius: 0;
+  background: #0060a0; border: none;
+  box-shadow: -100vw 0 0 100vw #007acc;
+}
+#time-slider::-moz-range-thumb {
+  -moz-appearance: none;
+  width: 12px; height: 12px; border-radius: 0;
+  background:#0060a0; border: none;
+  box-shadow: -100vw 0 0 100vw #007acc;
+}
+#audio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px; border-radius: 0;
+  background:  #b45400; border: none;
+  box-shadow: -100vw 0 0 100vw #e67e22;
+}
+#audio-slider::-moz-range-thumb {
+  -moz-appearance: none;
+  width: 12px; height: 12px; border-radius: 0;
+  background:  #b45400; border: none;
+  box-shadow: -100vw 0 0 100vw #e67e22;
 }
 #toolbar-time {
   font-size: 11px;
@@ -279,13 +314,6 @@ body {
   max-width: none;
 }
 
-#audio-slider {
-  flex: 1;
-  min-width: 40px;
-  accent-color: #e67e22;
-  cursor: pointer;
-  height: 4px;
-}
 #audio-time {
   font-size: 11px;
   color: #aaa;
@@ -301,7 +329,7 @@ body {
 /* ── Scrollbar styling ─────────────────────────────────── */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #1e1e1e; }
-::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #555; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #777; }
 
 /* ── Tuner panel (lil-gui host) ────────────────────────── */
