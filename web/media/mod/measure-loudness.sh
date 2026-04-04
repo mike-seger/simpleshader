@@ -17,28 +17,37 @@ TMPDIR_RENDER=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_RENDER"' EXIT
 
 # ── Parse file list + existing gains/durations from index.js
-files=()
+# ── Parse existing gains/durations from index.js
 declare -A existing_gains
 declare -A existing_durations
+declare -A in_index
 
-while IFS= read -r line; do
-  # Object entry:  { file: "trance/foo.xm", gain: 1.234, duration: 71.7 },
-  if [[ "$line" =~ file:\ *\"([^\"]*)\" ]]; then
-    local_file="${BASH_REMATCH[1]}"
-    files+=("$local_file")
-    if [[ "$line" =~ gain:\ *([0-9.]+) ]]; then
-      existing_gains["$local_file"]="${BASH_REMATCH[1]}"
+if [[ -f index.js ]]; then
+  while IFS= read -r line; do
+    if [[ "$line" =~ file:\ *\"([^\"]*)\" ]]; then
+      local_file="${BASH_REMATCH[1]}"
+      in_index["$local_file"]=1
+      if [[ "$line" =~ gain:\ *([0-9.]+) ]]; then
+        existing_gains["$local_file"]="${BASH_REMATCH[1]}"
+      fi
+      if [[ "$line" =~ duration:\ *([0-9.]+) ]]; then
+        existing_durations["$local_file"]="${BASH_REMATCH[1]}"
+      fi
+    elif [[ "$line" =~ \"([^\"]+\.(mod|xm|s3m|it))\" ]]; then
+      in_index["${BASH_REMATCH[1]}"]=1
     fi
-    if [[ "$line" =~ duration:\ *([0-9.]+) ]]; then
-      existing_durations["$local_file"]="${BASH_REMATCH[1]}"
-    fi
-  # Plain string entry:  "trance/foo.xm",
-  elif [[ "$line" =~ \"([^\"]+\.(mod|xm|s3m|it))\" ]]; then
-    files+=("${BASH_REMATCH[1]}")
-  fi
-done < index.js
+  done < index.js
+fi
 
-echo "Found ${#files[@]} tracks (${#existing_gains[@]} already measured)."
+# ── Auto-discover all tracker files in current dir and subdirs
+files=()
+while IFS= read -r -d '' path; do
+  # Strip leading ./ to get relative path
+  rel="${path#./}"
+  files+=("$rel")
+done < <(find . -maxdepth 2 -type f \( -iname '*.mod' -o -iname '*.xm' -o -iname '*.s3m' -o -iname '*.it' \) -print0 | sort -z)
+
+echo "Found ${#files[@]} tracks on disk (${#existing_gains[@]} already measured)."
 echo ""
 
 # ── Measure each file ─────────────────────────────────────

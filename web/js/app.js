@@ -83,9 +83,6 @@ function fpsHandler(fps) {
 }
 renderer.onFps = fpsHandler;
 renderer.start();
-// Start paused — user clicks play to begin
-renderer.togglePause();
-btnPlayPause.textContent = "play_arrow";
 
 // Resume AudioContext on user interaction (autoplay policy)
 document.addEventListener("click", () => {
@@ -127,9 +124,11 @@ setInterval(() => {
            : gpuAudio.hasAudio ? gpuAudio.getState()
            : mediaLoader.getAudioState();
   if (as && !audioSliderDragging) {
-    audioSlider.max = String(as.duration || 100);
-    audioSlider.value = String(as.currentTime);
-    audioTimeEl.textContent = formatAudioTime(as.currentTime, as.duration);
+    const dur = as.duration || 100;
+    const ct = dur > 0 && as.currentTime >= dur ? as.currentTime % dur : as.currentTime;
+    audioSlider.max = String(dur);
+    audioSlider.value = String(ct);
+    audioTimeEl.textContent = formatAudioTime(ct, dur);
   }
 }, 100);
 
@@ -633,6 +632,6 @@ window.addEventListener("beforeunload", () => popout.destroy());
 
 // Restore paused state
 if (localStorage.getItem("simpleshader_paused") === "1") {
-  renderer.togglePause();
+  if (!renderer.paused) renderer.togglePause();
   btnPlayPause.textContent = "play_arrow";
 }

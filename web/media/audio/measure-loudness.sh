@@ -13,29 +13,32 @@ if [[ "${1:-}" == "--force" ]]; then FORCE=true; fi
 
 TARGET_LUFS=-14   # target integrated loudness
 
-# ── Parse file list + existing values from index.js ────────
-files=()
+# ── Parse existing values from index.js ────────
 declare -A existing_gains
 declare -A existing_durations
 
-while IFS= read -r line; do
-  # Object entry:  { file: "song.mp3", gain: 1.234, duration: 180.5 },
-  if [[ "$line" =~ file:\ *\"([^\"]*)\" ]]; then
-    local_file="${BASH_REMATCH[1]}"
-    files+=("$local_file")
-    if [[ "$line" =~ gain:\ *([0-9.]+) ]]; then
-      existing_gains["$local_file"]="${BASH_REMATCH[1]}"
+if [[ -f index.js ]]; then
+  while IFS= read -r line; do
+    if [[ "$line" =~ file:\ *\"([^\"]*)\" ]]; then
+      local_file="${BASH_REMATCH[1]}"
+      if [[ "$line" =~ gain:\ *([0-9.]+) ]]; then
+        existing_gains["$local_file"]="${BASH_REMATCH[1]}"
+      fi
+      if [[ "$line" =~ duration:\ *([0-9.]+) ]]; then
+        existing_durations["$local_file"]="${BASH_REMATCH[1]}"
+      fi
     fi
-    if [[ "$line" =~ duration:\ *([0-9.]+) ]]; then
-      existing_durations["$local_file"]="${BASH_REMATCH[1]}"
-    fi
-  # Plain string entry:  "song.mp3",
-  elif [[ "$line" =~ \"([^\"]+\.(mp3|ogg|wav|flac))\" ]]; then
-    files+=("${BASH_REMATCH[1]}")
-  fi
-done < index.js
+  done < index.js
+fi
 
-echo "Found ${#files[@]} tracks (${#existing_gains[@]} already measured)."
+# ── Auto-discover all audio files in current dir and subdirs
+files=()
+while IFS= read -r -d '' path; do
+  rel="${path#./}"
+  files+=("$rel")
+done < <(find . -maxdepth 2 -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.flac' \) -print0 | sort -z)
+
+echo "Found ${#files[@]} tracks on disk (${#existing_gains[@]} already measured)."
 echo ""
 
 # ── Measure each file ─────────────────────────────────────
