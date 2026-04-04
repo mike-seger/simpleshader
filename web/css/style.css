@@ -263,14 +263,14 @@ body {
 }
 /* Track */
 #time-slider::-webkit-slider-runnable-track,
-#audio-slider::-webkit-slider-runnable-track { background: #b7b7b7; }
+#audio-slider::-webkit-slider-runnable-track { background: #9c9c9c; }
 #time-slider::-moz-range-track,
-#audio-slider::-moz-range-track { background: #b7b7b7; height: 100%; }
+#audio-slider::-moz-range-track { background: #9c9c9c; height: 100%; }
 /* Thumb — box-shadow paints the elapsed fill */
 #time-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px; height: 12px; border-radius: 50%;
-  background: #0060a0; border: none;
+  background: #ffffff; border: none;
   box-shadow: -100vw 100px 4px 100vw #007acc;
 }
 #time-slider::-moz-range-thumb {
@@ -282,7 +282,7 @@ body {
 #audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px; height: 12px; border-radius: 50%;
-  background:  #b45400; border: none;
+  background:  #ffffff; border: none;
   box-shadow: -100vw 100px 4px 100vw #e67e22;
 }
 #audio-slider::-moz-range-thumb {
@@ -291,6 +291,7 @@ body {
   background:  #b45400; border: none;
   box-shadow: -100vw 100px 4px 100vw #e67e22;
 }
+
 #toolbar-time {
   font-size: 11px;
   color: #aaa;
