@@ -623,7 +623,7 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
       if (currentType === 'mod') {
         mediaLoader.switchModSource(url, gain);
       } else {
-        mediaLoader.switchAudioSource(url);
+        mediaLoader.switchAudioSource(url, gain);
       }
       const src = getSource();
       const activeFolder = currentType === 'mod' ? modFolder : audioFolder;

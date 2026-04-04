@@ -119,10 +119,12 @@ export class MediaLoader {
     this._audioElements.push(audio);
 
     const source = this._audioCtx.createMediaElementSource(audio);
+    const gainNode = this._audioCtx.createGain();
     const analyser = this._audioCtx.createAnalyser();
     analyser.fftSize = 512;  // 256 frequency bins
     analyser.smoothingTimeConstant = 0.8;
-    source.connect(analyser);
+    source.connect(gainNode);
+    gainNode.connect(analyser);
     analyser.connect(this._audioCtx.destination);
 
     const freqData = new Uint8Array(256);
@@ -131,7 +133,7 @@ export class MediaLoader {
 
     // Don't auto-play — wait for user gesture via play button
 
-    this.channels.set(channel, { type: 'audio', analyser, freqData, waveData, texData });
+    this.channels.set(channel, { type: 'audio', analyser, freqData, waveData, texData, gainNode });
   }
 
   /** Load a MOD/XM/S3M/IT tracker file via chiptune3. */
@@ -339,13 +341,20 @@ export class MediaLoader {
    * analyser graph. Only works if audio was previously loaded.
    * @param {string} url  Absolute or relative URL to the new audio file.
    */
-  async switchAudioSource(url) {
+  async switchAudioSource(url, gain) {
     const el = this._audioElements[0];
     if (!el) return;
     const wasPlaying = !el.paused;
     el.pause();
     el.src = url;
     el.load();
+    // Apply gain normalization
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'audio' && ch.gainNode) {
+        ch.gainNode.gain.value = gain || 1;
+        break;
+      }
+    }
     if (wasPlaying) {
       try { await el.play(); } catch (_) { /* autoplay policy */ }
     }
@@ -428,13 +437,17 @@ export class MediaLoader {
   }
 
   /**
-   * Set the playback gain for the first mod channel.
+   * Set the playback gain for the first audio-like channel (audio or mod).
    * @param {number} gain  Linear gain multiplier (1 = unity)
    */
-  setModGain(gain) {
+  setGain(gain) {
     for (const ch of this.channels.values()) {
       if (ch.type === 'mod' && ch.modPlayer) {
         ch.modPlayer.gain.gain.value = gain;
+        return;
+      }
+      if (ch.type === 'audio' && ch.gainNode) {
+        ch.gainNode.gain.value = gain;
         return;
       }
     }

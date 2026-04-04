@@ -256,7 +256,7 @@ body {
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
-  height: 8px;
+  height: 12px;
   border-radius: 6px;
   overflow: hidden;
   background: transparent;
@@ -269,27 +269,27 @@ body {
 /* Thumb — box-shadow paints the elapsed fill */
 #time-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px; height: 12px; border-radius: 0;
+  width: 12px; height: 12px; border-radius: 50%;
   background: #0060a0; border: none;
-  box-shadow: -100vw 0 0 100vw #007acc;
+  box-shadow: -100vw 100px 4px 100vw #007acc;
 }
 #time-slider::-moz-range-thumb {
   -moz-appearance: none;
-  width: 12px; height: 12px; border-radius: 0;
+  width: 12px; height: 12px; border-radius: 50%;
   background:#0060a0; border: none;
-  box-shadow: -100vw 0 0 100vw #007acc;
+  box-shadow: -100vw 100px 4px 100vw #007acc;
 }
 #audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px; height: 12px; border-radius: 0;
+  width: 12px; height: 12px; border-radius: 50%;
   background:  #b45400; border: none;
-  box-shadow: -100vw 0 0 100vw #e67e22;
+  box-shadow: -100vw 100px 4px 100vw #e67e22;
 }
 #audio-slider::-moz-range-thumb {
   -moz-appearance: none;
-  width: 12px; height: 12px; border-radius: 0;
+  width: 12px; height: 12px; border-radius: 50%;
   background:  #b45400; border: none;
-  box-shadow: -100vw 0 0 100vw #e67e22;
+  box-shadow: -100vw 100px 4px 100vw #e67e22;
 }
 #toolbar-time {
   font-size: 11px;

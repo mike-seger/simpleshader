@@ -181,13 +181,21 @@ document.addEventListener("pointerup", () => {
 timeSlider.addEventListener("input", () => {
   const t = parseFloat(timeSlider.value);
   activeRenderer().seekTo(t);
-  if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(t);
-  else if (gpuAudio.hasAudio) gpuAudio.seekTo(t);
+  if (mediaLoader.audioType === 'mod') {
+    const ms = mediaLoader.getModState();
+    mediaLoader.seekMod(ms && ms.duration > 0 ? t % ms.duration : t);
+  } else if (gpuAudio.hasAudio) {
+    gpuAudio.seekTo(t);
+  } else {
+    const as = mediaLoader.getAudioState();
+    if (as && as.duration > 0) mediaLoader.seekAudio(t % as.duration);
+  }
 });
 btnResetTime.addEventListener("click", () => {
   activeRenderer().seekTo(0);
   if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(0);
   else if (gpuAudio.hasAudio) gpuAudio.seekTo(0);
+  else mediaLoader.seekAudio(0);
   timeSlider.max = String(SLIDER_INIT_MAX);
   timeSlider.value = "0";
   toolbarTime.textContent = "00:00.00";
@@ -508,9 +516,9 @@ async function applyShader(source, focusTuner) {
   }) : null;
   tuner.setAudioConfig(audioConfig);
 
-  // Apply per-track gain normalization for mod/tracker files
+  // Apply per-track gain normalization
   if (audioConfig && audioConfig.currentGain !== 1) {
-    mediaLoader.setModGain(audioConfig.currentGain);
+    mediaLoader.setGain(audioConfig.currentGain);
   }
 
   let resolved;
