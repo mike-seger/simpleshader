@@ -500,12 +500,18 @@ async function applyShader(source, focusTuner) {
   audioControls.classList.toggle("hidden", !hasAudio);
 
   // Set audio config for tuner panel
-  tuner.setAudioConfig(hasAudio ? await buildAudioConfig(mediaAnns, baseUrl, {
+  const audioConfig = hasAudio ? await buildAudioConfig(mediaAnns, baseUrl, {
     mediaLoader,
     getSource: () => editor.getValue(),
     setSource: (s) => editor.setValue(s),
     applyShader,
-  }) : null);
+  }) : null;
+  tuner.setAudioConfig(audioConfig);
+
+  // Apply per-track gain normalization for mod/tracker files
+  if (audioConfig && audioConfig.currentGain !== 1) {
+    mediaLoader.setModGain(audioConfig.currentGain);
+  }
 
   let resolved;
   try {

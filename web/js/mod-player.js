@@ -127,8 +127,9 @@ export default class ModPlayer {
   /**
    * Fetch a tracker file and prepare it for playback (paused).
    * @param {string} url  URL to the .mod/.xm/.s3m/.it file
+   * @param {number} [gain=1]  Linear gain multiplier for volume normalization
    */
-  async load(url) {
+  async load(url, gain) {
     // Stop current playback
     if (this._hasAudio && this._player) {
       this._player.stop();
@@ -137,6 +138,7 @@ export default class ModPlayer {
     this._playing     = false;
     this._duration    = 0;
     this._currentTime = 0;
+    this._gain        = gain || 1;
 
     await this._ensurePlayer();
 
@@ -154,7 +156,7 @@ export default class ModPlayer {
     this._player.play(this._buffer);
     await metaReady;
     this._player.pause();
-    this._player.gain.gain.value = 1;
+    this._player.gain.gain.value = this._gain;
     this._player.setPos(0);
 
     this._hasAudio    = true;

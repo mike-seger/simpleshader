@@ -405,7 +405,7 @@ export class MediaLoader {
    * Switch the mod source on the first mod channel.
    * @param {string} url  Absolute URL to the new MOD file.
    */
-  async switchModSource(url) {
+  async switchModSource(url, gain) {
     // Find the mod channel number
     let modChannel = -1;
     for (const [channel, ch] of this.channels) {
@@ -422,8 +422,22 @@ export class MediaLoader {
     const buffer = await res.arrayBuffer();
     ch.modBuffer = buffer;
 
+    ch.modPlayer.gain.gain.value = gain || 1;
     ch.modPlayer.play(buffer);
     ch.modPlaying = true;
+  }
+
+  /**
+   * Set the playback gain for the first mod channel.
+   * @param {number} gain  Linear gain multiplier (1 = unity)
+   */
+  setModGain(gain) {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'mod' && ch.modPlayer) {
+        ch.modPlayer.gain.gain.value = gain;
+        return;
+      }
+    }
   }
 
   /**

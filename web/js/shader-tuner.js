@@ -244,9 +244,11 @@ export default class ShaderTuner {
       const tracks = currentType === 'mod' ? ac.modTracks : ac.audioTracks;
       const trackMap = {};
       const fileMap = {};
+      const gainMap = {};
       for (const t of tracks) {
         trackMap[t.label] = t.url;
         fileMap[t.label] = t.file;
+        gainMap[t.label] = t.gain || 1;
       }
       // Find current label
       const cur = tracks.find(t => t.url === ac.currentUrl);
@@ -270,7 +272,7 @@ export default class ShaderTuner {
         .onChange((label) => {
           const url = trackMap[label];
           const file = fileMap[label];
-          if (url) ac.onSwitch(url, file);
+          if (url) ac.onSwitch(url, file, gainMap[label] || 1);
         });
       this._trackSelect = this._enhanceSelect(trackCtrl);
     }
@@ -586,12 +588,17 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
     }
   }
 
-  function buildTracks(files, folderPath) {
-    return files.map(f => ({
-      label: f.replace(/\.[^.]+$/, ''),
-      file: f,
-      url: new URL((folderPath + f).replace(/#/g, '%23'), baseUrl).href,
-    }));
+  function buildTracks(entries, folderPath) {
+    return entries.map(entry => {
+      const file = typeof entry === 'string' ? entry : entry.file;
+      const gain = typeof entry === 'string' ? 1 : (entry.gain || 1);
+      return {
+        label: file.replace(/\.[^.]+$/, ''),
+        file,
+        gain,
+        url: new URL((folderPath + file).replace(/#/g, '%23'), baseUrl).href,
+      };
+    });
   }
 
   const [modFiles, audioFiles] = await Promise.all([
@@ -602,15 +609,19 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
   const modTracks = buildTracks(modFiles, modFolder);
   const audioTracks = buildTracks(audioFiles, audioFolder);
   const currentUrl = new URL(ann.path.replace(/#/g, '%23'), baseUrl).href;
+  const allTracks = currentType === 'mod' ? modTracks : audioTracks;
+  const currentTrack = allTracks.find(t => t.url === currentUrl);
+  const currentGain = currentTrack ? currentTrack.gain : 1;
 
   return {
     modTracks,
     audioTracks,
     defaultType: currentType,
     currentUrl,
-    onSwitch: (url, file) => {
+    currentGain,
+    onSwitch: (url, file, gain) => {
       if (currentType === 'mod') {
-        mediaLoader.switchModSource(url);
+        mediaLoader.switchModSource(url, gain);
       } else {
         mediaLoader.switchAudioSource(url);
       }
