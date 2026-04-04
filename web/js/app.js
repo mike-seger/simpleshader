@@ -48,6 +48,7 @@ const audioTimeEl      = document.getElementById("audio-time");
 let currentName = null;   // active custom shader name (null = built-in)
 let currentPath = null;   // active built-in shader path
 let debugVisible = false; // debug overlay state
+let popout = null;        // pop-out preview manager (initialised below)
 
 // ── Time slider state ─────────────────────────────────────
 const SLIDER_INIT_MAX = 600;  // 10 minutes initial range
@@ -550,7 +551,7 @@ function hideError() {
 
 // ── Pop-out preview ───────────────────────────────────────
 
-const popout = new PopoutManager({
+popout = new PopoutManager({
   renderer,
   Renderer,
   mediaLoader,

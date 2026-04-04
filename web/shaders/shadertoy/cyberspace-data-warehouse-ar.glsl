@@ -8,7 +8,7 @@ precision highp float;
 // and Inigo Quilez (iq) for  https://iquilezles.org/www/index.htm
 // and whole Shadertoy community for inspiration.
 
-// @iChannel0 "web/media/audio/06 - 3 Body Problem.mp3" audio
+// @iChannel0 "../../media/audio/06 - 3 Body Problem.mp3" audio
 
 uniform vec2 u_resolution;
 uniform float u_time;
