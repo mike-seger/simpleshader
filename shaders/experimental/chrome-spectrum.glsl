@@ -56,9 +56,6 @@ vec3 cellInfo(vec2 cell) {
     }
     f = clamp(f, 0.0, 1.0); f *= f;
     f = max(f, 0.05);
-    // Lower cylinders near the camera to prevent clipping
-    float camDist = distance(cell + 0.5, g_camXZ);
-    f *= smoothstep(0.5, 3.0, camDist);
     return vec3(3.0 * f, id, f);
 }
 
@@ -96,7 +93,15 @@ vec4 traceGrid(vec3 ro, vec3 rd, float tmin, float tmax, out vec3 nor) {
 
         if (h > 0.01) {
             float hh = h * 0.5;
-            vec3 ce = vec3(cell.x + 0.5, hh, cell.y + 0.5);
+            // push cylinder away from camera so it stays >= 0.5 distance
+            vec2 cylXZ = cell + 0.5;
+            vec2 toCyl = cylXZ - g_camXZ;
+            float camDist = length(toCyl);
+            if (camDist < 1.5) {
+                float safeDist = max(camDist, 0.5);
+                cylXZ = g_camXZ + normalize(toCyl) * safeDist;
+            }
+            vec3 ce = vec3(cylXZ.x, hh, cylXZ.y);
             vec3 rc = ro - ce;
             // AABB of rounded cylinder
             vec3 box = vec3(0.42, hh + 0.14, 0.42);
