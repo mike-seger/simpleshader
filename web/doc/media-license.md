@@ -4,9 +4,8 @@
 
 The MP3 audio files in `web/media/audio/` are used for shader audio-reactivity demos. All tracks remain the property of their respective artists:
 
-- **Perpetual Overload**, **3 Body Problem**, **Industrial Dreams**, **Between The Worlds**, **Neural Networks**, **Sounds Of Infinity** — from the album *Synthetic Pleasures*
-- **80's Synthwave — Synthetic Pleasures** by MOKKA
-- **The Gate To The Past (Remix)** by California Sunshine
+- **Perpetual Overload**, **3 Body Problem**, **Industrial Dreams**, **Between The Worlds**, **Neural Networks**, **Sounds Of Infinity** — from the album *Minimal Two* provided by [PandaBeatsMusic](https://pandabeatsmusic.com/)
+- [80's Synthwave — Synthetic Pleasures](https://www.youtube.com/watch?v=LmWsog9oHI8) by MOKKA
 
 These tracks are included for personal/demo use only and are not redistributable.
 

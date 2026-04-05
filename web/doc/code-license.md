@@ -2,7 +2,7 @@
 
 ### Simple Shader application code
 
-The Simple Shader application code (HTML, CSS, JavaScript) is original work. It is provided as-is for personal and educational use.
+The Simple Shader application code (HTML, CSS, JavaScript) is original work, released under the [MIT License](https://github.com/michaelseger/simpleshader/blob/main/LICENSE).
 
 ### Third-party libraries
 
@@ -13,7 +13,8 @@ Simple Shader loads the following libraries from CDN at runtime — none are bun
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.45.0 | MIT | Code editor with GLSL syntax |
 | [lil-gui](https://github.com/georgealways/lil-gui) | 0.19 | MIT | Shader parameter tuning panel |
 | [chiptune3](https://github.com/nicoan/chiptune3) | 0.8 | MIT | MOD/XM/IT tracker playback (via libopenmpt) |
-| [JSZip](https://github.com/nicoan/chiptune3) | 3.x | MIT / GPLv3 | ZIP import for drag-and-drop shader import |
+| [JSZip](https://github.com/Stuk/jszip) | 3.x | MIT / GPLv3 | ZIP import for drag-and-drop shader import |
+| [marked](https://github.com/markedjs/marked) | 15.x | MIT | Markdown rendering for documentation page |
 
 ### Original shaders
 
