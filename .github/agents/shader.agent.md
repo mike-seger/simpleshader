@@ -43,11 +43,11 @@ Replace these identifiers:
 
 ## File Placement
 
-- Original shaders → `web/shaders/experimental/`
-- Shadertoy ports → `web/shaders/shadertoy/`
-- Tweetcart/xordev ports → `web/shaders/xordev/`
-- Reusable functions → `web/shaders/lib/`
-- After adding a shader, update `web/shaders/index.js` to include it in the sidebar listing.
+- Original shaders → `shaders/experimental/`
+- Shadertoy ports → `shaders/shadertoy/`
+- Tweetcart/xordev ports → `shaders/xordev/`
+- Reusable functions → `shaders/lib/`
+- After adding a shader, update `shaders/index.js` to include it in the sidebar listing.
 
 ## Output
 

@@ -18,12 +18,12 @@ Simple Shader loads the following libraries from CDN at runtime — none are bun
 
 ### Original shaders
 
-Shaders in `web/shaders/experimental/` are original work unless otherwise noted in the file header. Some shaders credit techniques or inspiration from other sources — see each file's header comment for details.
+Shaders in `shaders/experimental/` are original work unless otherwise noted in the file header. Some shaders credit techniques or inspiration from other sources — see each file's header comment for details.
 
 ### GLSL include libraries
 
-The reusable GLSL libraries in `web/shaders/lib/` (palette, grid, plasma) are original work and may be freely used in any shader.
+The reusable GLSL libraries in `shaders/lib/` (palette, grid, plasma) are original work and may be freely used in any shader.
 
 ### Material Symbols font
 
-The icon font (`web/font/symbols.woff2`) is a subset of [Material Symbols Rounded](https://fonts.google.com/icons) by Google, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+The icon font (`font/symbols.woff2`) is a subset of [Material Symbols Rounded](https://fonts.google.com/icons) by Google, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

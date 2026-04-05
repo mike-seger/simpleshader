@@ -9,33 +9,32 @@ Served locally with `python3 -m http.server 8080` from the repo root.
 ## Architecture
 
 ```
-web/
-  js/
-    app.js              — entry point, wires sidebar + renderer + editor + toolbar
-    renderer.js         — WebGL context, shader compilation, render loop
-    shader-compiler.js  — @include resolution and channel uniform injection
-    shadertoy-export.js — converts playground GLSL to Shadertoy-compatible code
-    editor.js           — Monaco editor wrapper
-    sidebar.js          — shader tree navigation (reads web/shaders/index.js)
-    shader-tuner.js     — @lil-gui annotation parser → lil-gui panel + audio config
-    popout.js           — pop-out preview window manager
-    splitter.js         — draggable pane divider
-    store.js            — localStorage persistence for custom shaders
-    media-loader.js     — @iChannel media loading (audio, images)
-    mod-player.js       — MOD/XM tracker playback (via chiptune3/libopenmpt)
-    gpu-audio.js        — GPU-based audio synthesis from GLSL shaders
-  shaders/
-    default.glsl        — fallback shader
-    index.js            — static shader listing for sidebar
-    lib/                — reusable @include libraries (palette, grid, plasma)
-    experimental/       — original shaders in development
-    shadertoy/          — ported Shadertoy remixes
-    xordev/             — ported xordev tweetcarts
-  media/
-    audio/              — audio files (MP3) + index.js
-    mod/                — tracker modules (MOD/XM) + index.js
-  css/style.css
-  font/                 — Material Symbols icon font (subset)
+js/
+  app.js              — entry point, wires sidebar + renderer + editor + toolbar
+  renderer.js         — WebGL context, shader compilation, render loop
+  shader-compiler.js  — @include resolution and channel uniform injection
+  shadertoy-export.js — converts playground GLSL to Shadertoy-compatible code
+  editor.js           — Monaco editor wrapper
+  sidebar.js          — shader tree navigation (reads shaders/index.js)
+  shader-tuner.js     — @lil-gui annotation parser → lil-gui panel + audio config
+  popout.js           — pop-out preview window manager
+  splitter.js         — draggable pane divider
+  store.js            — localStorage persistence for custom shaders
+  media-loader.js     — @iChannel media loading (audio, images)
+  mod-player.js       — MOD/XM tracker playback (via chiptune3/libopenmpt)
+  gpu-audio.js        — GPU-based audio synthesis from GLSL shaders
+shaders/
+  default.glsl        — fallback shader
+  index.js            — static shader listing for sidebar
+  lib/                — reusable @include libraries (palette, grid, plasma)
+  experimental/       — original shaders in development
+  shadertoy/          — ported Shadertoy remixes
+  xordev/             — ported xordev tweetcarts
+media/
+  audio/              — audio files (MP3) + index.js
+  mod/                — tracker modules (MOD/XM) + index.js
+css/style.css
+font/                 — Material Symbols icon font (subset)
 cpp/                    — offline C++ renderer (PPM frame output)
 ```
 
@@ -74,7 +73,7 @@ Range heuristics from name: `*OPACITY*`/`*ALPHA*`/`*RATIO*` → [0,1]; `*SIZE*` 
 // @include ../lib/palette.glsl
 ```
 
-Resolved relative to the shader file's URL at compile time by `shader-compiler.js`. Available libraries in `web/shaders/lib/`:
+Resolved relative to the shader file's URL at compile time by `shader-compiler.js`. Available libraries in `shaders/lib/`:
 - `palette.glsl` — `cospalette()`, `getPaletteColor(t, palette)` (6 presets)
 - `grid.glsl` — `framedRect()`, grid drawing utilities
 - `plasma.glsl` — `plasma(uv, t)` four-wave sine plasma

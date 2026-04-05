@@ -8,7 +8,7 @@ You are a systems architect and developer for a standalone audio-reactive shader
 > **STATUS: FUTURE PROJECT — NOT YET IMPLEMENTED**
 >
 > This agent describes a planned standalone visualizer appliance. No code exists yet.
-> The web-based Simple Shader playground (in `web/`) is the current, working project.
+> The web-based Simple Shader playground is the current, working project.
 > Use this agent only for design discussions and planning of the visualizer.
 
 # Project: Audio Shader Visualizer

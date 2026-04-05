@@ -37,7 +37,7 @@ EOF
       [ -n "$file" ] || continue
       base=${file##*/}
       name=$(title_case "$base")
-      path="web/shaders/${file#./}"
+      path="shaders/${file#./}"
       printf '      { name: "%s", path: "%s" },\n' "$name" "$path"
     done <<< "$files"
 
@@ -54,4 +54,4 @@ export default SHADER_INDEX;
 EOF
 } > index.js
 
-echo "Wrote web/shaders/index.js"
+echo "Wrote shaders/index.js"

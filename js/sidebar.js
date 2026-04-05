@@ -12,7 +12,7 @@ let defaultTemplate = null;
 async function getDefaultTemplate() {
   if (defaultTemplate !== null) return defaultTemplate;
   try {
-    const res = await fetch("web/shaders/default.glsl");
+    const res = await fetch("shaders/default.glsl");
     if (res.ok) defaultTemplate = await res.text();
     else defaultTemplate = "";
   } catch { defaultTemplate = ""; }

@@ -660,8 +660,8 @@ window.addEventListener("beforeunload", () => popout.destroy());
   const shaderParam = params.get("shader");
   let booted = false;
   if (shaderParam) {
-    // Resolve relative to web/shaders/
-    const path = "web/shaders/" + shaderParam;
+    // Resolve relative to shaders/
+    const path = "shaders/" + shaderParam;
     booted = sidebar.selectByKey(path);
   }
   if (!booted) {

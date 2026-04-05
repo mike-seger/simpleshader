@@ -2,7 +2,7 @@
 # Index all image files with their dimensions, auto-discovering files on disk.
 #
 # Requires: sips (macOS built-in) or identify (ImageMagick)
-# Usage:    cd web/media/textures && bash measure-textures.sh
+# Usage:    cd media/textures && bash measure-textures.sh
 
 set -eo pipefail
 

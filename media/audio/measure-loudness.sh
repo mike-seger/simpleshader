@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Measure integrated loudness (EBU R128) and duration of every tracker file
+# Measure integrated loudness (EBU R128) and duration of every audio file
 # listed in index.js and regenerate index.js with per-file gain/duration values.
 #
-# Requires: openmpt123 (brew install libopenmpt), ffmpeg
-# Usage:    cd web/media/mod && bash measure-loudness.sh
-#           bash measure-loudness.sh --force   # re-measure all, ignore cached gains
+# Requires: ffmpeg
+# Usage:    cd media/audio && bash measure-loudness.sh
+#           bash measure-loudness.sh --force   # re-measure all, ignore cached values
 
 set -eo pipefail
 
@@ -13,39 +13,30 @@ if [[ "${1:-}" == "--force" ]]; then FORCE=true; fi
 
 TARGET_LUFS=-14   # target integrated loudness
 
-TMPDIR_RENDER=$(mktemp -d)
-trap 'rm -rf "$TMPDIR_RENDER"' EXIT
-
-# ── Parse file list + existing gains/durations from index.js
-# ── Parse existing gains/durations from index.js
+# ── Parse existing values from index.js ────────
 declare -A existing_gains
 declare -A existing_durations
-declare -A in_index
 
 if [[ -f index.js ]]; then
   while IFS= read -r line; do
     if [[ "$line" =~ file:\ *\"([^\"]*)\" ]]; then
       local_file="${BASH_REMATCH[1]}"
-      in_index["$local_file"]=1
       if [[ "$line" =~ gain:\ *([0-9.]+) ]]; then
         existing_gains["$local_file"]="${BASH_REMATCH[1]}"
       fi
       if [[ "$line" =~ duration:\ *([0-9.]+) ]]; then
         existing_durations["$local_file"]="${BASH_REMATCH[1]}"
       fi
-    elif [[ "$line" =~ \"([^\"]+\.(mod|xm|s3m|it))\" ]]; then
-      in_index["${BASH_REMATCH[1]}"]=1
     fi
   done < index.js
 fi
 
-# ── Auto-discover all tracker files in current dir and subdirs
+# ── Auto-discover all audio files in current dir and subdirs
 files=()
 while IFS= read -r -d '' path; do
-  # Strip leading ./ to get relative path
   rel="${path#./}"
   files+=("$rel")
-done < <(find . -maxdepth 2 -type f \( -iname '*.mod' -o -iname '*.xm' -o -iname '*.s3m' -o -iname '*.it' \) -print0 | sort -z)
+done < <(find . -maxdepth 2 -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.flac' \) -print0 | sort -z)
 
 echo "Found ${#files[@]} tracks on disk (${#existing_gains[@]} already measured)."
 echo ""
@@ -69,32 +60,12 @@ for f in "${files[@]}"; do
     continue
   fi
 
-  # Get duration from openmpt123 --info
-  # Get duration from openmpt123 --info (format: "Duration...: MM:SS.mmm")
-  dur_str=$(openmpt123 --info "$f" 2>&1 | grep '^Duration' | grep -oE '[0-9]+:[0-9]+\.[0-9]+')
-  # Parse MM:SS.mmm → seconds
-  if [[ "$dur_str" =~ ([0-9]+):([0-9.]+) ]]; then
-    dur_secs=$(echo "${BASH_REMATCH[1]} * 60 + ${BASH_REMATCH[2]}" | bc -l)
-    dur_secs=$(printf "%.1f" "$dur_secs")
-  else
-    dur_secs="0"
-  fi
-
-  # Render to WAV in temp dir
-  wav_file="$TMPDIR_RENDER/render.wav"
-  rm -f "$wav_file"
-
-  openmpt123 --batch --quiet --force -o "$wav_file" "$f" 2>/dev/null
-
-  if [[ ! -f "$wav_file" ]]; then
-    echo "SKIP (render failed): $f"
-    gains["$f"]="1.0"
-    durations["$f"]="$dur_secs"
-    continue
-  fi
+  # Get duration via ffprobe
+  dur_secs=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f" 2>/dev/null || echo "0")
+  dur_secs=$(printf "%.1f" "$dur_secs")
 
   # Measure EBU R128 integrated loudness
-  lufs=$(ffmpeg -i "$wav_file" -af loudnorm=print_format=json -f null - 2>&1 \
+  lufs=$(ffmpeg -i "$f" -af loudnorm=print_format=json -f null - 2>&1 \
     | grep '"input_i"' \
     | head -1 \
     | sed 's/.*: *"\([^"]*\)".*/\1/')
@@ -103,7 +74,6 @@ for f in "${files[@]}"; do
     echo "SKIP (silent): $f"
     gains["$f"]="1.0"
     durations["$f"]="$dur_secs"
-    rm -f "$wav_file"
     continue
   fi
 
@@ -117,7 +87,6 @@ for f in "${files[@]}"; do
   echo "$f  →  ${lufs} LUFS  →  gain: ${gain_linear}  dur: ${dur_secs}s"
   gains["$f"]="$gain_linear"
   durations["$f"]="$dur_secs"
-  rm -f "$wav_file"
 done
 
 # ── Write new index.js ─────────────────────────────────────
@@ -129,9 +98,9 @@ done
   for i in "${!files[@]}"; do
     f="${files[$i]}"
     g="${gains[$f]}"
+    d="${durations[$f]}"
     comma=","
     if (( i == last_idx )); then comma=""; fi
-    d="${durations[$f]}"
     printf '  { file: "%s", gain: %s, duration: %s }%s\n' "$f" "$g" "$d" "$comma"
   done
 
@@ -139,4 +108,4 @@ done
 } > index.js
 
 echo ""
-echo "✓ index.js updated with per-track gain values."
+echo "✓ index.js updated with per-track gain and duration values."
