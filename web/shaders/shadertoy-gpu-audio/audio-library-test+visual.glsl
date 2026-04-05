@@ -3,7 +3,7 @@ precision highp float;
 // Audio Library Test + Visual
 // https://www.shadertoy.com/view/7clGD7
 
-// @gpu-audio audio-library-test+visual-sound.glsl 60
+// @iChannel0 "audio-library-test+visual-sound.glsl" gpu-audio 60
 
 uniform vec2 u_resolution;
 uniform float u_time;

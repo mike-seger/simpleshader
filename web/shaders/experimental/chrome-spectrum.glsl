@@ -27,6 +27,9 @@ const float RIPPLE_SPEED = 4.5;   // @range(0, 10, 0.5)
 
 float hash(float n) { return fract(sin(n) * 91.7328); }
 
+// camera xz, set in main(), used by cellInfo() to lower cylinders near camera
+vec2 g_camXZ;
+
 // rounded cylinder SDF — inner radius 0.28, rounding 0.12 → visual radius 0.40
 float sdf(vec3 p, float halfH) {
     vec2 d = vec2(length(p.xz) - 0.28, abs(p.y) - halfH);
@@ -53,6 +56,9 @@ vec3 cellInfo(vec2 cell) {
     }
     f = clamp(f, 0.0, 1.0); f *= f;
     f = max(f, 0.05);
+    // Lower cylinders near the camera to prevent clipping
+    float camDist = distance(cell + 0.5, g_camXZ);
+    f *= smoothstep(0.5, 3.0, camDist);
     return vec3(3.0 * f, id, f);
 }
 
@@ -200,6 +206,7 @@ void main() {
     vec3 ro = vec3(7.0 * s8 * c8,
                    4.5 + 1.8 * sin(0.19 * time),
                    7.0 * c8);
+    g_camXZ = ro.xz;
     vec3 ta = vec3(1.5 * sin(0.31 * time),
                    0.6,
                    1.5 * cos(0.23 * time + 1.0));

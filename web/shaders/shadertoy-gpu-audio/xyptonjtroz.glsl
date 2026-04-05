@@ -7,7 +7,7 @@ precision highp float;
 
 // Audio by Dave_Hoskins
 
-// @gpu-audio xyptonjtroz-sound.glsl 60
+// @iChannel0 xyptonjtroz-sound.glsl gpu-audio 60
 
 uniform vec2 u_resolution;
 uniform float u_time;

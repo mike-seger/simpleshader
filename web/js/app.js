@@ -291,6 +291,7 @@ function applyPanelState() {
   // applyShader() handles the rebuild after async shader fetch completes.
   if (tuneOn && editor.getValue().trim()) {
     tuner.build().then(hasControls => {
+      btnModeTune.classList.toggle("dim", !hasControls);
       if (!hasControls) sidebarTuner.classList.add("hidden");
     });
   }
@@ -485,15 +486,23 @@ async function applyShader(source, focusTuner) {
   // Assign to active renderer
   activeRenderer().mediaLoader = mediaLoader;
 
-  // Parse and load @gpu-audio annotation
-  const gpuAudioAnn = parseGpuAudioAnnotation(source);
-  if (gpuAudioAnn) {
+  // Parse and load @gpu-audio annotation (from @iChannel or legacy @gpu-audio)
+  const gpuAudioAnn = mediaAnns.find(a => a.type === 'gpu-audio') || null;
+  const legacyGpuAnn = gpuAudioAnn ? null : parseGpuAudioAnnotation(source);
+  const effectiveGpuAnn = gpuAudioAnn
+    ? { path: gpuAudioAnn.path, duration: gpuAudioAnn.duration, channel: gpuAudioAnn.channel }
+    : legacyGpuAnn;
+  mediaLoader.clearGpuAudioChannel();
+  if (effectiveGpuAnn) {
     try {
-      const soundUrl = new URL(gpuAudioAnn.path, baseUrl).href;
+      const soundUrl = new URL(effectiveGpuAnn.path, baseUrl).href;
       const soundRes = await fetch(soundUrl);
       if (!soundRes.ok) throw new Error(`HTTP ${soundRes.status}`);
       const soundSrc = await soundRes.text();
-      await gpuAudio.load(soundSrc, 44100, gpuAudioAnn.duration);
+      await gpuAudio.load(soundSrc, 44100, effectiveGpuAnn.duration);
+      // Register gpu-audio FFT data as an iChannel so the renderer binds it
+      const ch = effectiveGpuAnn.channel ?? 0;
+      mediaLoader.setGpuAudioChannel(ch, gpuAudio);
     } catch (e) {
       console.warn('GPU audio load failed:', e);
       gpuAudio.dispose();
@@ -505,6 +514,30 @@ async function applyShader(source, focusTuner) {
   // Show/hide audio toolbar controls
   const hasAudio = mediaLoader.hasAudio || gpuAudio.hasAudio;
   audioControls.classList.toggle("hidden", !hasAudio);
+
+  // Auto-play audio when loading an audio-reactive shader.
+  // If the browser blocks autoplay, pause the visualizer too so both
+  // start together when the user clicks the main play button.
+  if (hasAudio) {
+    let blocked = false;
+    if (mediaLoader.audioType === 'mod') {
+      mediaLoader.resumeMod();
+    } else if (gpuAudio.hasAudio) {
+      gpuAudio.resume();
+    } else {
+      blocked = !(await mediaLoader.tryResumeAudio());
+    }
+    if (blocked) {
+      const r = activeRenderer();
+      if (!r.paused) {
+        r.togglePause();
+        btnPlayPause.textContent = "play_arrow";
+      }
+      btnAudioPlayPause.textContent = "play_arrow";
+    } else {
+      btnAudioPlayPause.textContent = "pause";
+    }
+  }
 
   // Set audio config for tuner panel
   const audioConfig = hasAudio ? await buildAudioConfig(mediaAnns, baseUrl, {
@@ -550,6 +583,7 @@ async function applyShader(source, focusTuner) {
     // Rebuild tuner controls for the newly loaded shader
     if (btnModeTune.classList.contains("active")) {
       tuner.build().then(hasControls => {
+        btnModeTune.classList.toggle("dim", !hasControls);
         if (!hasControls) sidebarTuner.classList.add("hidden");
         else {
           sidebarTuner.classList.remove("hidden");

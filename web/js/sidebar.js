@@ -5,6 +5,7 @@
 
 import SHADER_INDEX from "../shaders/index.js";
 import { loadCustomShaders, upsertCustomShader, renameCustomShader, deleteCustomShader } from "./store.js";
+import ContextMenu from "./context-menu.js";
 
 let defaultTemplate = null;
 
@@ -29,6 +30,7 @@ export default class Sidebar {
     this._activeEl = null;
     this._items = [];
     this._folders = [];
+    this._ctxMenu = new ContextMenu();
     this._build();
     this._initKeyboard();
   }
@@ -43,6 +45,8 @@ export default class Sidebar {
     const frag = document.createDocumentFragment();
 
     for (const group of SHADER_INDEX) {
+      if (group.folder === "restricted" &&
+          !["localhost", "127.0.0.1"].includes(location.hostname)) continue;
       frag.appendChild(this._buildFolder(group.folder, group.shaders, false));
     }
 
@@ -83,6 +87,10 @@ export default class Sidebar {
       } else {
         item.dataset.path = shader.path;
         item.addEventListener("click", () => this._select(item, shader.path));
+        item.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          this._showItemMenu(e, shader.path);
+        });
       }
       children.appendChild(item);
     }
@@ -125,6 +133,20 @@ export default class Sidebar {
   _select(el, path) {
     this._setActive(el);
     this._onSelect(path, undefined);
+  }
+
+  _showItemMenu(e, path) {
+    this._ctxMenu.show(e.clientX, e.clientY, [
+      {
+        label: "Copy Shader Link",
+        icon: "link",
+        action: () => {
+          const rel = path.replace(/^web\/shaders\//, "");
+          const link = window.location.origin + window.location.pathname + "?shader=" + encodeURIComponent(rel);
+          navigator.clipboard.writeText(link);
+        },
+      },
+    ]);
   }
 
   _selectCustom(el, name) {

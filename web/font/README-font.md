@@ -5,6 +5,6 @@ https://fonts.google.com/icons
 adapt [ligature list](original/used-symbols-names.txt)
 run:
 ```
-original/convert-material-symbols.sh --fill 0 --grad 0 --opsz 48 --wght 500
+web/font/convert-material-symbols.sh --fill 0 --grad 0 --opsz 48 --wght 500
 ```
 then open `original/index.html` to preview the generated ligatures.

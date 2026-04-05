@@ -368,3 +368,37 @@ body {
 
 /* Shader action icons visible only when list panel is open */
 body:not(.panel-list) .sb-shader-action { display: none !important; }
+
+/* Dimmed sidebar icon (no tuner controls) */
+.sb-icon.dim { opacity: 0.35; }
+
+/* ── Context menu ──────────────────────────────────────── */
+.ctx-menu {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  min-width: 160px;
+  background: #2d2d2d;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  font-size: 13px;
+  color: #ccc;
+}
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-menu-item:hover { background: #094771; color: #fff; }
+.ctx-menu-icon {
+  font-family: 'Material Icons Round-Regular';
+  font-size: 18px;
+  line-height: 1;
+  width: 18px;
+  text-align: center;
+}

@@ -5,7 +5,7 @@ precision highp float;
 // I started making these visuals for Dave's "Tropical Beeper" track, but then the
 // soundshader-feature was added. :P
 
-// @gpu-audio sound-acid-jam-sound.glsl 60
+// @iChannel0 sound-acid-jam-sound.glsl gpu-audio 60
 
 uniform vec2 u_resolution;
 uniform float u_time;

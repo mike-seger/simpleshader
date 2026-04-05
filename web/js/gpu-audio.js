@@ -2,6 +2,9 @@
  * GPU Audio — renders Shadertoy-style sound shaders on the GPU.
  *
  * Shader annotation (in the image shader):
+ *   // @iChannel0 path/to/sound.glsl gpu-audio [duration]
+ *
+ * Legacy syntax (still supported):
  *   // @gpu-audio path/to/sound.glsl [duration]
  *
  * The referenced .glsl file must define:

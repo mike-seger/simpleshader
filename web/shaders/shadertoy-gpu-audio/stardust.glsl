@@ -4,7 +4,7 @@ precision highp float;
 // Created by Dmitry Andreev - and'2014
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
-// @gpu-audio stardust-sound.glsl 60
+// @iChannel0 stardust-sound.glsl gpu-audio 60
 
 uniform vec2 u_resolution;
 uniform float u_time;

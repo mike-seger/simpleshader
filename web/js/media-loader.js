@@ -21,19 +21,23 @@ async function loadChiptuneLib() {
 /**
  * Parse @iChannel annotations from shader source.
  * @param {string} src  Raw shader source (before @include resolution)
- * @returns {Array<{channel: number, path: string, type: 'image'|'audio'|'mod'|'texture'}>}
+ * @returns {Array<{channel: number, path: string, type: 'image'|'audio'|'mod'|'texture'|'gpu-audio', duration?: number}>}
  */
 export function parseMediaAnnotations(src) {
-  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod|texture))?\s*$/gm;
+  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod|texture|gpu-audio))?(?:\s+(\d+(?:\.\d+)?))?\s*$/gm;
   const results = [];
   let m;
   while ((m = re.exec(src)) !== null) {
     const kind = m[4];
-    results.push({
+    const entry = {
       channel: parseInt(m[1], 10),
       path: m[2] || m[3],
-      type: kind === 'audio' ? 'audio' : kind === 'mod' ? 'mod' : kind === 'texture' ? 'texture' : 'image',
-    });
+      type: kind === 'audio' ? 'audio' : kind === 'mod' ? 'mod' : kind === 'texture' ? 'texture' : kind === 'gpu-audio' ? 'gpu-audio' : 'image',
+    };
+    if (kind === 'gpu-audio' && m[5]) {
+      entry.duration = parseFloat(m[5]);
+    }
+    results.push(entry);
   }
   return results;
 }
@@ -62,6 +66,7 @@ export class MediaLoader {
     }
     this.channels.clear();
     this._textures = new WeakMap();
+    this._gpuAudioChannel = null;
     for (const el of this._audioElements) {
       el.pause();
       el.src = '';
@@ -83,6 +88,7 @@ export class MediaLoader {
   async load(annotations, baseUrl) {
     this.dispose();
     await Promise.all(annotations.map(a => {
+      if (a.type === 'gpu-audio') return;  // handled by GpuAudio
       // Encode # as %23 before URL construction (# is the fragment delimiter)
       const safePath = a.path.replace(/#/g, '%23');
       const url = new URL(safePath, baseUrl).href;
@@ -93,6 +99,32 @@ export class MediaLoader {
       }
       return this._loadImage(a.channel, url);  // 'image' or 'texture'
     }));
+  }
+
+  /**
+   * Register a GpuAudio instance as an audio channel so its FFT data
+   * gets bound and uploaded like any other audio channel.
+   * @param {number} channel  Channel index (from annotation)
+   * @param {import('./gpu-audio.js').default} gpuAudioInstance
+   */
+  setGpuAudioChannel(channel, gpuAudioInstance) {
+    this._gpuAudioChannel = { channel, instance: gpuAudioInstance };
+    this.channels.set(channel, {
+      type: 'audio',
+      analyser: null,
+      freqData: null,
+      waveData: null,
+      texData: null,
+      _gpuAudio: gpuAudioInstance,
+    });
+  }
+
+  /** Remove the gpu-audio channel registration. */
+  clearGpuAudioChannel() {
+    if (this._gpuAudioChannel) {
+      this.channels.delete(this._gpuAudioChannel.channel);
+      this._gpuAudioChannel = null;
+    }
   }
 
   /** Load an image into a channel (stores the Image for per-context texture creation). */
@@ -207,7 +239,10 @@ export class MediaLoader {
   /** Call once per frame to capture audio/mod FFT data (no GL operations). */
   updateAudio() {
     for (const ch of this.channels.values()) {
-      if ((ch.type === 'audio' || ch.type === 'mod') && ch.analyser) {
+      if (ch._gpuAudio) {
+        ch._gpuAudio.updateAudio();
+        ch.texData = ch._gpuAudio._texData;
+      } else if ((ch.type === 'audio' || ch.type === 'mod') && ch.analyser) {
         ch.analyser.getByteFrequencyData(ch.freqData);
         ch.analyser.getByteTimeDomainData(ch.waveData);
         ch.texData.set(ch.freqData, 0);
@@ -295,6 +330,21 @@ export class MediaLoader {
     for (const el of this._audioElements) {
       if (el.paused) el.play().catch(() => {});
     }
+  }
+
+  /**
+   * Try to resume audio. Returns true if playback started, false if blocked.
+   */
+  async tryResumeAudio() {
+    if (this._audioCtx && this._audioCtx.state === 'suspended') {
+      this._audioCtx.resume();
+    }
+    for (const el of this._audioElements) {
+      if (el.paused) {
+        try { await el.play(); } catch { return false; }
+      }
+    }
+    return this._audioElements.length > 0;
   }
 
   /** Pause audio playback. */

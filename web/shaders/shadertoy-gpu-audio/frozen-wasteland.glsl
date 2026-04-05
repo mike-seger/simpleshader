@@ -5,7 +5,7 @@ precision highp float;
 // https://www.shadertoy.com/view/Xls3D2
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
-// @gpu-audio frozen-wasteland-sound.glsl 180
+// @iChannel0 frozen-wasteland-sound.glsl gpu-audio 180
 
 uniform vec2 u_resolution;
 uniform float u_time;

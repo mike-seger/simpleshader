@@ -29,6 +29,7 @@ var SYMBOL_NAMES = [
   'fullscreen_exit',
   'left_panel_close',
   'left_panel_open',
+  'link',
   'list',
   'list_alt',
   'list_alt_check',
