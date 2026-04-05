@@ -211,11 +211,17 @@ export default class ShaderTuner {
     this._proxyObj = {};
     /** @type {{tracks: {label:string, url:string}[], currentUrl: string, onSwitch: (url:string)=>void}|null} */
     this._audioConfig = null;
+    this._textureConfigs = [];
   }
 
   /** Set audio track switching configuration. Call before build(). */
   setAudioConfig(config) {
     this._audioConfig = config;
+  }
+
+  /** Set texture switching configurations (one per @iChannel texture). Call before build(). */
+  setTextureConfigs(configs) {
+    this._textureConfigs = configs || [];
   }
 
   async build() {
@@ -226,8 +232,9 @@ export default class ShaderTuner {
 
     const hasAudio = this._audioConfig &&
       (this._audioConfig.modTracks.length > 0 || this._audioConfig.audioTracks.length > 0);
+    const hasTextures = this._textureConfigs.length > 0;
 
-    if (this._parsed.length === 0 && !hasAudio) {
+    if (this._parsed.length === 0 && !hasAudio && !hasTextures) {
       return false;
     }
 
@@ -243,11 +250,11 @@ export default class ShaderTuner {
       const currentType = ac.defaultType;  // 'mod' | 'audio'
       const tracks = currentType === 'mod' ? ac.modTracks : ac.audioTracks;
       const trackMap = {};
-      const fileMap = {};
+      const pathMap = {};
       const gainMap = {};
       for (const t of tracks) {
         trackMap[t.label] = t.url;
-        fileMap[t.label] = t.file;
+        pathMap[t.label] = t.annPath;
         gainMap[t.label] = t.gain || 1;
       }
       // Find current label
@@ -256,25 +263,50 @@ export default class ShaderTuner {
       const folderTitle = 'Sound';
       const folder = this._gui.addFolder(folderTitle);
 
-      // Type selector (Audio file / Tracker)
-      this._proxyObj.__audioType = currentType === 'mod' ? 'Tracker: MOD/XM...' : 'Audio URL';
-      const typeCtrl = folder.add(this._proxyObj, '__audioType', ['Audio URL', 'Tracker: MOD/XM...'])
-        .name('Type')
-        .onChange((label) => {
-          const newType = label === 'Tracker: MOD/XM...' ? 'mod' : 'audio';
-          if (newType !== currentType) ac.onSwitchType(newType);
-        });
-      this._enhanceSelect(typeCtrl);
+      // Type selector (Audio file / Tracker) — hide when an unmanaged entry is present
+      const hasUnmanaged = tracks.some(t => t.label.startsWith('! '));
+      if (!hasUnmanaged) {
+        this._proxyObj.__audioType = currentType === 'mod' ? 'Tracker: MOD/XM...' : 'Audio URL';
+        const typeCtrl = folder.add(this._proxyObj, '__audioType', ['Audio URL', 'Tracker: MOD/XM...'])
+          .name('Type')
+          .onChange((label) => {
+            const newType = label === 'Tracker: MOD/XM...' ? 'mod' : 'audio';
+            if (newType !== currentType) ac.onSwitchType(newType);
+          });
+        this._enhanceSelect(typeCtrl);
+      }
 
       // Track selector
       const trackCtrl = folder.add(this._proxyObj, "__audioTrack", Object.keys(trackMap))
         .name("Track")
         .onChange((label) => {
           const url = trackMap[label];
-          const file = fileMap[label];
-          if (url) ac.onSwitch(url, file, gainMap[label] || 1);
+          const annPath = pathMap[label];
+          if (url) ac.onSwitch(url, annPath, gainMap[label] || 1);
         });
       this._trackSelect = this._enhanceSelect(trackCtrl);
+    }
+
+    // Texture channel selectors (one per @iChannel texture)
+    for (const tc of this._textureConfigs) {
+      const texMap = {};
+      const texFileMap = {};
+      for (const t of tc.tracks) {
+        texMap[t.label] = t.url;
+        texFileMap[t.label] = t.file;
+      }
+      const cur = tc.tracks.find(t => t.url === tc.currentUrl);
+      const propName = `__texture_ch${tc.channel}`;
+      this._proxyObj[propName] = cur ? cur.label : (tc.tracks[0]?.label || '');
+      const folder = this._gui.addFolder(`Texture ch${tc.channel}`);
+      const ctrl = folder.add(this._proxyObj, propName, Object.keys(texMap))
+        .name('Image')
+        .onChange((label) => {
+          const url = texMap[label];
+          const file = texFileMap[label];
+          if (url) tc.onSwitch(url, file);
+        });
+      this._enhanceSelect(ctrl);
     }
 
     if (this._parsed.length === 0) return true;
@@ -573,9 +605,21 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
   const lastSlash = ann.path.lastIndexOf('/');
   const folder = lastSlash >= 0 ? ann.path.substring(0, lastSlash + 1) : '';
 
-  // Derive both mod and audio folder paths
-  const modFolder = currentType === 'mod' ? folder : folder.replace(/audio\/$/, 'mod/');
-  const audioFolder = currentType === 'audio' ? folder : folder.replace(/mod\/$/, 'audio/');
+  // Derive both mod and audio folder paths.
+  // If the annotation path already lives under a recognized media folder, swap between them.
+  // Otherwise fall back to the well-known ../../media/{audio,mod}/ paths relative to the shader.
+  let modFolder, audioFolder;
+  if (/audio\/$/i.test(folder)) {
+    audioFolder = folder;
+    modFolder = folder.replace(/audio\/$/, 'mod/');
+  } else if (/mod\/$/i.test(folder)) {
+    modFolder = folder;
+    audioFolder = folder.replace(/mod\/$/, 'audio/');
+  } else {
+    // Unmanaged path — use standard media locations relative to shaders/
+    modFolder = '../../media/mod/';
+    audioFolder = '../../media/audio/';
+  }
 
   async function loadIndex(folderPath) {
     try {
@@ -595,6 +639,7 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
       return {
         label: file.replace(/\.[^.]+$/, ''),
         file,
+        annPath: folderPath + file,
         gain,
         url: new URL((folderPath + file).replace(/#/g, '%23'), baseUrl).href,
       };
@@ -613,32 +658,41 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
   const currentTrack = allTracks.find(t => t.url === currentUrl);
   const currentGain = currentTrack ? currentTrack.gain : 1;
 
+  // If the current path isn't in the index, prepend it as an unmanaged entry
+  if (!currentTrack) {
+    const file = ann.path.substring(ann.path.lastIndexOf('/') + 1);
+    allTracks.unshift({
+      label: '! ' + file.replace(/\.[^.]+$/, ''),
+      file,
+      annPath: ann.path,
+      gain: 1,
+      url: currentUrl,
+    });
+  }
+
   return {
     modTracks,
     audioTracks,
     defaultType: currentType,
     currentUrl,
     currentGain,
-    onSwitch: (url, file, gain) => {
+    onSwitch: (url, annPath, gain) => {
       if (currentType === 'mod') {
         mediaLoader.switchModSource(url, gain);
       } else {
         mediaLoader.switchAudioSource(url, gain);
       }
       const src = getSource();
-      const activeFolder = currentType === 'mod' ? modFolder : audioFolder;
-      const newPath = activeFolder + file;
       const re = new RegExp(
         '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod))',
       );
-      const updated = src.replace(re, `$1"${newPath}"$2`);
+      const updated = src.replace(re, `$1"${annPath}"$2`);
       if (updated !== src) setSource(updated);
     },
     onSwitchType: (newType) => {
       const tracks = newType === 'mod' ? modTracks : audioTracks;
       if (tracks.length === 0) return;
-      const targetFolder = newType === 'mod' ? modFolder : audioFolder;
-      const newPath = targetFolder + tracks[0].file;
+      const newPath = tracks[0].annPath;
       const src = getSource();
       const re = new RegExp(
         '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)\\s+(?:audio|mod)',
@@ -650,4 +704,76 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
       }
     },
   };
+}
+
+/**
+ * Build texture switching configs for all @iChannel texture annotations.
+ * Returns an array (one per texture channel) for the tuner panel.
+ *
+ * @param {Array}    annotations  Parsed @iChannel media annotations
+ * @param {string}   baseUrl      Base URL for resolving relative paths
+ * @param {object}   deps         External dependencies
+ * @param {object}   deps.mediaLoader  MediaLoader instance
+ * @param {Function} deps.getSource    Returns current editor source
+ * @param {Function} deps.setSource    Sets editor source
+ */
+export async function buildTextureConfigs(annotations, baseUrl, { mediaLoader, getSource, setSource }) {
+  const textureAnns = annotations.filter(a => a.type === 'texture');
+  if (textureAnns.length === 0) return [];
+
+  const configs = [];
+  for (const ann of textureAnns) {
+    // Derive folder path from annotation path
+    const lastSlash = ann.path.lastIndexOf('/');
+    const folder = lastSlash >= 0 ? ann.path.substring(0, lastSlash + 1) : '';
+
+    let entries;
+    try {
+      const indexUrl = new URL(folder + 'index.js', baseUrl).href;
+      const mod = await import(indexUrl);
+      entries = mod.default || [];
+    } catch (e) {
+      console.warn('Could not load texture index:', folder, e);
+      continue;
+    }
+
+    const tracks = entries.map(entry => {
+      const file = typeof entry === 'string' ? entry : entry.file;
+      return {
+        label: file.replace(/\.[^.]+$/, ''),
+        file,
+        url: new URL((folder + file).replace(/#/g, '%23'), baseUrl).href,
+      };
+    });
+
+    const currentUrl = new URL(ann.path.replace(/#/g, '%23'), baseUrl).href;
+
+    // If the current path isn't in the index, prepend it as an unmanaged entry
+    if (!tracks.some(t => t.url === currentUrl)) {
+      const file = ann.path.substring(ann.path.lastIndexOf('/') + 1);
+      tracks.unshift({
+        label: '! ' + file.replace(/\.[^.]+$/, ''),
+        file,
+        url: currentUrl,
+      });
+    }
+
+    configs.push({
+      channel: ann.channel,
+      tracks,
+      currentUrl,
+      onSwitch: (url, file) => {
+        mediaLoader.switchImageSource(ann.channel, url);
+        const src = getSource();
+        const newPath = folder + file;
+        const re = new RegExp(
+          '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+texture)',
+        );
+        const updated = src.replace(re, `$1"${newPath}"$2`);
+        if (updated !== src) setSource(updated);
+      },
+    });
+  }
+
+  return configs;
 }

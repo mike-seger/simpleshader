@@ -21,17 +21,18 @@ async function loadChiptuneLib() {
 /**
  * Parse @iChannel annotations from shader source.
  * @param {string} src  Raw shader source (before @include resolution)
- * @returns {Array<{channel: number, path: string, type: 'image'|'audio'}>}
+ * @returns {Array<{channel: number, path: string, type: 'image'|'audio'|'mod'|'texture'}>}
  */
 export function parseMediaAnnotations(src) {
-  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod))?\s*$/gm;
+  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod|texture))?\s*$/gm;
   const results = [];
   let m;
   while ((m = re.exec(src)) !== null) {
+    const kind = m[4];
     results.push({
       channel: parseInt(m[1], 10),
       path: m[2] || m[3],
-      type: m[4] === 'audio' ? 'audio' : m[4] === 'mod' ? 'mod' : 'image',
+      type: kind === 'audio' ? 'audio' : kind === 'mod' ? 'mod' : kind === 'texture' ? 'texture' : 'image',
     });
   }
   return results;
@@ -90,7 +91,7 @@ export class MediaLoader {
       } else if (a.type === 'mod') {
         return this._loadMod(a.channel, url);
       }
-      return this._loadImage(a.channel, url);
+      return this._loadImage(a.channel, url);  // 'image' or 'texture'
     }));
   }
 
@@ -334,6 +335,26 @@ export class MediaLoader {
     for (const el of this._audioElements) {
       el.currentTime = time;
     }
+  }
+
+  /**
+   * Switch the image on a texture channel, replacing the old image.
+   * @param {number} channel  Channel number to update
+   * @param {string} url  Absolute URL to the new image
+   */
+  async switchImageSource(channel, url) {
+    const ch = this.channels.get(channel);
+    if (!ch || ch.type !== 'image') return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      img.src = url;
+    });
+    ch.img = img;
+    // Invalidate per-context textures so they get recreated on next bind
+    this._textures = new WeakMap();
   }
 
   /**

@@ -13,6 +13,7 @@ const SHADER_INDEX = [
       { name: "Champions Ball 3", path: "web/shaders/experimental/champions-ball-3.glsl" },
       { name: "Champions Ball 4", path: "web/shaders/experimental/champions-ball-4.glsl" },
       { name: "Champions Ball 5", path: "web/shaders/experimental/champions-ball-5.glsl" },
+      { name: "Chrome Spectrum", path: "web/shaders/experimental/chrome-spectrum.glsl" },
       { name: "Lipstick Dancers", path: "web/shaders/experimental/lipstick-dancers.glsl" },
       { name: "Meteor Ball", path: "web/shaders/experimental/meteor-ball.glsl" },
       { name: "Meteors", path: "web/shaders/experimental/meteors.glsl" },
@@ -26,6 +27,9 @@ const SHADER_INDEX = [
   {
     folder: "restricted",
     shaders: [
+      { name: "Chrome Spectrum", path: "web/shaders/restricted/chrome-spectrum.glsl" },
+      { name: "Chrome Spectrum1", path: "web/shaders/restricted/chrome-spectrum1.glsl" },
+      { name: "Chrome Spectrum2", path: "web/shaders/restricted/chrome-spectrum2.glsl" },
       { name: "Cubescape Alt", path: "web/shaders/restricted/cubescape-alt.glsl" },
       { name: "Cubescape", path: "web/shaders/restricted/cubescape.glsl" },
     ],

@@ -7,7 +7,7 @@ import Editor from "./editor.js";
 import Sidebar from "./sidebar.js";
 import { initSplitter } from "./splitter.js";
 import { upsertCustomShader, loadCustomShaders } from "./store.js";
-import ShaderTuner, { buildAudioConfig } from "./shader-tuner.js";
+import ShaderTuner, { buildAudioConfig, buildTextureConfigs } from "./shader-tuner.js";
 import { MediaLoader, parseMediaAnnotations } from "./media-loader.js";
 import GpuAudio, { parseGpuAudioAnnotation } from "./gpu-audio.js";
 import { toShadertoy } from "./shadertoy-export.js";
@@ -519,6 +519,14 @@ async function applyShader(source, focusTuner) {
   if (audioConfig && audioConfig.currentGain !== 1) {
     mediaLoader.setGain(audioConfig.currentGain);
   }
+
+  // Set texture config for tuner panel
+  const textureConfigs = await buildTextureConfigs(mediaAnns, baseUrl, {
+    mediaLoader,
+    getSource: () => editor.getValue(),
+    setSource: (s) => editor.setValue(s),
+  });
+  tuner.setTextureConfigs(textureConfigs);
 
   let resolved;
   try {

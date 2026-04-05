@@ -78,13 +78,17 @@ Paths are relative to the shader file's location.
 
 Load external images or audio as sampler inputs:
 ```glsl
-// @iChannel0 media/audio.mp3  audio   — audio FFT texture (256×2 LUMINANCE)
-// @iChannel1 media/image.jpg          — static image texture
+// @iChannel0 media/audio.mp3  audio     — audio FFT texture (256×2 LUMINANCE)
+// @iChannel1 media/image.jpg            — static image texture (no selector)
+// @iChannel2 media/textures/img.png  texture  — image with texture selector in lil-gui
 ```
 
 Paths resolve relative to the shader file URL. The `uniform sampler2D u_channel*` declarations are injected automatically.
 
 Audio channels produce a 256×2 texture: row 0 = frequency data, row 1 = waveform (like Shadertoy).
+
+The `texture` type loads the image identically to a plain image but additionally shows a
+texture selector dropdown in the lil-gui panel, populated from `index.js` in the same folder.
 
 ## Common Patterns
 
