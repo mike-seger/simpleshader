@@ -27,6 +27,7 @@ var SYMBOL_NAMES = [
   'forward_5',
   'fullscreen',
   'fullscreen_exit',
+  'info',
   'left_panel_close',
   'left_panel_open',
   'link',
