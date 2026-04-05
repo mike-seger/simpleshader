@@ -2,7 +2,7 @@
 
 ### Simple Shader application code
 
-The Simple Shader application code (HTML, CSS, JavaScript) is original work, released under the [MIT License](https://github.com/michaelseger/simpleshader/blob/main/LICENSE).
+The Simple Shader application code (HTML, CSS, JavaScript) is original work, released under the [MIT License](https://github.com/mike-seger/simpleshader/blob/main/LICENSE).
 
 ### Third-party libraries
 

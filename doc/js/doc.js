@@ -76,6 +76,14 @@ function initScrollSpy() {
   const links = navEl.querySelectorAll("a[href^='#']");
   if (links.length === 0) return;
 
+  // Click a nav link → immediately highlight it
+  for (const link of links) {
+    link.addEventListener("click", () => {
+      for (const l of links) l.classList.remove("active");
+      link.classList.add("active");
+    });
+  }
+
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
@@ -95,7 +103,7 @@ function initScrollSpy() {
 
 async function init() {
   try {
-    const res = await fetch("../README.md");
+    const res = await fetch("doc.md");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     let src = await res.text();
     src = await resolveIncludes(src);
