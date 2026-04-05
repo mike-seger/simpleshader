@@ -27,8 +27,9 @@ const float RIPPLE_SPEED = 4.5;   // @range(0, 10, 0.5)
 
 float hash(float n) { return fract(sin(n) * 91.7328); }
 
-// camera xz, set in main(), used by cellInfo() to lower cylinders near camera
+// camera position, set in main(), used to avoid cylinder-camera collision
 vec2 g_camXZ;
+float g_camY;
 
 // rounded cylinder SDF — inner radius 0.28, rounding 0.12 → visual radius 0.40
 float sdf(vec3 p, float halfH) {
@@ -93,15 +94,17 @@ vec4 traceGrid(vec3 ro, vec3 rd, float tmin, float tmax, out vec3 nor) {
 
         if (h > 0.01) {
             float hh = h * 0.5;
-            // push cylinder away from camera so it stays >= 0.5 distance
-            vec2 cylXZ = cell + 0.5;
-            vec2 toCyl = cylXZ - g_camXZ;
-            float camDist = length(toCyl);
+            float cylY = hh;
+            // lower cylinder if its top would collide with the camera
+            float camDist = distance(cell + 0.5, g_camXZ);
             if (camDist < 1.5) {
-                float safeDist = max(camDist, 0.5);
-                cylXZ = g_camXZ + normalize(toCyl) * safeDist;
+                float margin = 0.5;
+                float cylTop = h; // cylinder top = 2 * hh = h
+                if (cylTop > g_camY - margin) {
+                    cylY -= (cylTop - (g_camY - margin));
+                }
             }
-            vec3 ce = vec3(cylXZ.x, hh, cylXZ.y);
+            vec3 ce = vec3(cell.x + 0.5, cylY, cell.y + 0.5);
             vec3 rc = ro - ce;
             // AABB of rounded cylinder
             vec3 box = vec3(0.42, hh + 0.14, 0.42);
@@ -212,6 +215,7 @@ void main() {
                    4.5 + 1.8 * sin(0.19 * time),
                    7.0 * c8);
     g_camXZ = ro.xz;
+    g_camY  = ro.y;
     vec3 ta = vec3(1.5 * sin(0.31 * time),
                    0.6,
                    1.5 * cos(0.23 * time + 1.0));
