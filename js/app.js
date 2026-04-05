@@ -677,3 +677,24 @@ if (localStorage.getItem("simpleshader_paused") === "1") {
   if (!renderer.paused) renderer.togglePause();
   btnPlayPause.textContent = "play_arrow";
 }
+
+// ── Global keyboard shortcuts ─────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Ignore shortcuts when typing in editor or inputs
+  const tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || e.target.classList.contains("monaco-mouse-cursor-text")) return;
+
+  if (e.key === " ") {
+    e.preventDefault();
+    btnPlayPause.click();
+  }
+
+  if (e.key === "Escape" && document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+});
+
+// Double-click preview canvas to enter fullscreen
+canvas.addEventListener("dblclick", () => {
+  if (!document.fullscreenElement) canvas.requestFullscreen();
+});

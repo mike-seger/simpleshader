@@ -95,7 +95,7 @@ function initScrollSpy() {
 
 async function init() {
   try {
-    const res = await fetch("index.md");
+    const res = await fetch("../README.md");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     let src = await res.text();
     src = await resolveIncludes(src);

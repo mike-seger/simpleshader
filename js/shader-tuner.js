@@ -212,6 +212,19 @@ export default class ShaderTuner {
     /** @type {{tracks: {label:string, url:string}[], currentUrl: string, onSwitch: (url:string)=>void}|null} */
     this._audioConfig = null;
     this._textureConfigs = [];
+
+    // Capture-phase: block up/down on all tuner controls so they never
+    // reach lil-gui inputs or native <select>/<input type="number">.
+    // This lets the sidebar's shader-switching handler (on #sidebar) work.
+    this._container.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        // Dispatch on #sidebar so the shader-switch handler fires
+        this._container.closest("#sidebar")
+          ?.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, bubbles: true }));
+      }
+    }, true);
   }
 
   /** Set audio track switching configuration. Call before build(). */
@@ -487,6 +500,11 @@ export default class ShaderTuner {
     const selectEl = ctrl.$widget.querySelector('select');
     if (!selectEl) return null;
     selectEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        selectEl.showPicker?.() || selectEl.dispatchEvent(new MouseEvent('mousedown'));
+        return;
+      }
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       const opts = Array.from(selectEl.options);
@@ -520,15 +538,7 @@ export default class ShaderTuner {
         ctrl.setValue(Math.max(ctrl._min, Math.min(ctrl._max, v)));
         return;
       }
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const idx = this._sliderInputs.indexOf(sliderEl);
-        if (idx < 0) return;
-        const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
-        if (next >= 0 && next < this._sliderInputs.length) {
-          this._sliderInputs[next].focus();
-        }
-      }
+      // Up/down left for sidebar shader switching (don't handle here)
     });
   }
 

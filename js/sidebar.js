@@ -177,7 +177,10 @@ export default class Sidebar {
   /* ── Keyboard navigation ─────────────────────────────── */
 
   _initKeyboard() {
-    this._container.addEventListener("keydown", (e) => {
+    // Listen on the sidebar root so up/down works from both the
+    // shader list and the tuner panel (select/slider controls).
+    const sidebar = this._container.closest("#sidebar") || this._container;
+    sidebar.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         this._navigate(e.key === "ArrowDown" ? 1 : -1);

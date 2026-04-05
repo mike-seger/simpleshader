@@ -87,15 +87,9 @@ export default class PopoutManager {
     c.style.cssText = "display:block;width:100%;height:100%";
     doc.body.appendChild(c);
 
-    // Double-click to enter fullscreen, ESC to exit
+    // Double-click to enter fullscreen (browser handles ESC exit automatically)
     c.addEventListener("dblclick", () => {
       if (!doc.fullscreenElement) c.requestFullscreen();
-    });
-    doc.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && doc.fullscreenElement) {
-        e.preventDefault();
-        doc.exitFullscreen();
-      }
     });
 
     const r = new this._Renderer(c);
