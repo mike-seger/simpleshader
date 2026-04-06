@@ -30,6 +30,7 @@ export default class PopoutManager {
     this._compileSource = compileSource;
     this._win = null;
     this._poll = null;
+    this._driveId = null;
     this._savedFlex = "";
     this._savedHeight = "";
   }
@@ -87,9 +88,21 @@ export default class PopoutManager {
     c.style.cssText = "display:block;width:100%;height:100%";
     doc.body.appendChild(c);
 
-    // Double-click to enter fullscreen (browser handles ESC exit automatically)
+    // Double-click to enter fullscreen; use documentElement so Firefox hides the address bar
     c.addEventListener("dblclick", () => {
-      if (!doc.fullscreenElement) c.requestFullscreen();
+      if (!doc.fullscreenElement) doc.documentElement.requestFullscreen();
+    });
+
+    // ESC to exit fullscreen (Chrome doesn't always auto-exit in popup windows)
+    // Space to toggle play/pause
+    doc.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && doc.fullscreenElement) {
+        doc.exitFullscreen();
+      }
+      if (e.key === " ") {
+        e.preventDefault();
+        document.getElementById("btn-playpause").click();
+      }
     });
 
     const r = new this._Renderer(c);
@@ -101,9 +114,19 @@ export default class PopoutManager {
     if (this._renderer.paused) r.togglePause();
     r.start();
 
+    // Cross-window render driver: when the popout loses focus its rAF is
+    // throttled, so the main window drives rendering as a fallback.
+    const driveFallback = () => {
+      if (!this._win || this._win.closed) return;
+      if (!this._win.document.hasFocus()) r._draw();
+      this._driveId = requestAnimationFrame(driveFallback);
+    };
+    this._driveId = requestAnimationFrame(driveFallback);
+
     // Poll to detect the pop-out being closed (beforeunload is unreliable)
     this._poll = setInterval(() => {
       if (!this._win || this._win.closed) {
+        if (this._driveId) { cancelAnimationFrame(this._driveId); this._driveId = null; }
         clearInterval(this._poll);
         this._poll = null;
         this._btnPopout.classList.remove("active");
@@ -115,6 +138,7 @@ export default class PopoutManager {
 
   /** Close the pop-out preview window. */
   close() {
+    if (this._driveId) { cancelAnimationFrame(this._driveId); this._driveId = null; }
     if (this._poll) { clearInterval(this._poll); this._poll = null; }
     if (this._win && !this._win.closed) this._win.close();
     this._win = null;
