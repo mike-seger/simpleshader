@@ -5,7 +5,8 @@ precision highp float;
 // I started making these visuals for Dave's "Tropical Beeper" track, but then the
 // soundshader-feature was added. :P
 
-// @iChannel0 sound-acid-jam-sound.glsl gpu-audio 60
+//x@iChannel0 sound-acid-jam-sound.glsl gpu-audio 60
+// @iChannel0 ../../media/ahx/Xeron/GoodTimes.ahx ahx 
 
 uniform vec2 u_resolution;
 uniform float u_time;

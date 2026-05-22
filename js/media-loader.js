@@ -1,15 +1,18 @@
 /**
- * Media loader — parses @iChannel annotations and loads textures / audio / MOD.
+ * Media loader — parses @iChannel annotations and loads textures / audio / MOD / AHX.
  *
  * Shader annotation syntax:
  *   // @iChannel0 path/to/image.jpg          — static image texture
  *   // @iChannel1 path/to/audio.mp3  audio   — audio FFT texture (256×2)
  *   // @iChannel0 path/to/song.mod   mod     — MOD/XM/S3M/IT tracker via chiptune3
+ *   // @iChannel0 path/to/song.ahx   ahx     — AHX tracker via ahx-player
  *
  * Paths are resolved relative to the shader file URL.
- * Audio/mod channels produce a 256×2 LUMINANCE texture updated every frame
+ * Audio/mod/ahx channels produce a 256×2 LUMINANCE texture updated every frame
  * (row 0 = frequency data, row 1 = waveform), similar to Shadertoy.
  */
+
+import AhxPlayer from './ahx-player.js';
 
 const CHIPTUNE_CDN = "https://cdn.jsdelivr.net/npm/chiptune3@0.8/chiptune3.js";
 let chiptuneModule = null;
@@ -21,10 +24,10 @@ async function loadChiptuneLib() {
 /**
  * Parse @iChannel annotations from shader source.
  * @param {string} src  Raw shader source (before @include resolution)
- * @returns {Array<{channel: number, path: string, type: 'image'|'audio'|'mod'|'texture'|'gpu-audio', duration?: number}>}
+ * @returns {Array<{channel: number, path: string, type: 'image'|'audio'|'mod'|'ahx'|'texture'|'gpu-audio', duration?: number}>}
  */
 export function parseMediaAnnotations(src) {
-  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod|texture|gpu-audio))?(?:\s+(\d+(?:\.\d+)?))?\s*$/gm;
+  const re = /^\s*\/\/\s*@iChannel(\d+)\s+(?:"([^"]+)"|(\S+))(?:\s+(audio|mod|ahx|texture|gpu-audio))?(?:\s+(\d+(?:\.\d+)?))?\s*$/gm;
   const results = [];
   let m;
   while ((m = re.exec(src)) !== null) {
@@ -32,7 +35,7 @@ export function parseMediaAnnotations(src) {
     const entry = {
       channel: parseInt(m[1], 10),
       path: m[2] || m[3],
-      type: kind === 'audio' ? 'audio' : kind === 'mod' ? 'mod' : kind === 'texture' ? 'texture' : kind === 'gpu-audio' ? 'gpu-audio' : 'image',
+      type: kind === 'audio' ? 'audio' : kind === 'mod' ? 'mod' : kind === 'ahx' ? 'ahx' : kind === 'texture' ? 'texture' : kind === 'gpu-audio' ? 'gpu-audio' : 'image',
     };
     if (kind === 'gpu-audio' && m[5]) {
       entry.duration = parseFloat(m[5]);
@@ -49,11 +52,12 @@ export function parseMediaAnnotations(src) {
  */
 export class MediaLoader {
   constructor() {
-    /** @type {Map<number, {type: string, analyser?: AnalyserNode, freqData?: Uint8Array, waveData?: Uint8Array, texData?: Uint8Array, img?: HTMLImageElement, modPlayer?: any}>} */
+    /** @type {Map<number, {type: string, analyser?: AnalyserNode, freqData?: Uint8Array, waveData?: Uint8Array, texData?: Uint8Array, img?: HTMLImageElement, modPlayer?: any, ahxPlayer?: AhxPlayer}>} */
     this.channels = new Map();
     this._audioCtx = null;
     this._audioElements = [];
     this._modPlayers = [];     // chiptune3 player instances
+    this._ahxPlayers = [];     // AhxPlayer instances
     /** @type {WeakMap<WebGLRenderingContext, Map<number, WebGLTexture>>} */
     this._textures = new WeakMap();
   }
@@ -77,6 +81,10 @@ export class MediaLoader {
       try { mp.stop(); } catch (_) {}
     }
     this._modPlayers = [];
+    for (const ap of this._ahxPlayers) {
+      try { ap.stop(); } catch (_) {}
+    }
+    this._ahxPlayers = [];
   }
 
   /**
@@ -96,6 +104,8 @@ export class MediaLoader {
         return this._loadAudio(a.channel, url);
       } else if (a.type === 'mod') {
         return this._loadMod(a.channel, url);
+      } else if (a.type === 'ahx') {
+        return this._loadAhx(a.channel, url);
       }
       return this._loadImage(a.channel, url);  // 'image' or 'texture'
     }));
@@ -236,12 +246,15 @@ export class MediaLoader {
     });
   }
 
-  /** Call once per frame to capture audio/mod FFT data (no GL operations). */
+  /** Call once per frame to capture audio/mod/ahx FFT data (no GL operations). */
   updateAudio() {
     for (const ch of this.channels.values()) {
       if (ch._gpuAudio) {
         ch._gpuAudio.updateAudio();
         ch.texData = ch._gpuAudio._texData;
+      } else if (ch.type === 'ahx' && ch.ahxPlayer) {
+        ch.ahxPlayer.updateAudio();
+        ch.texData = ch.ahxPlayer._texData;
       } else if ((ch.type === 'audio' || ch.type === 'mod') && ch.analyser) {
         ch.analyser.getByteFrequencyData(ch.freqData);
         ch.analyser.getByteTimeDomainData(ch.waveData);
@@ -268,7 +281,7 @@ export class MediaLoader {
       const ch = this.channels.get(channel);
       tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      if (ch.type === 'audio' || ch.type === 'mod') {
+      if (ch.type === 'audio' || ch.type === 'mod' || ch.type === 'ahx') {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 256, 2, 0,
                       gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -299,8 +312,8 @@ export class MediaLoader {
       gl.activeTexture(gl.TEXTURE0 + unit);
       const tex = this._getTexture(gl, channel);
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      // Upload latest FFT data for audio/mod channels
-      if ((ch.type === 'audio' || ch.type === 'mod') && ch.texData) {
+      // Upload latest FFT data for audio/mod/ahx channels
+      if ((ch.type === 'audio' || ch.type === 'mod' || ch.type === 'ahx') && ch.texData) {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 2,
                          gl.LUMINANCE, gl.UNSIGNED_BYTE, ch.texData);
       }
@@ -365,9 +378,9 @@ export class MediaLoader {
     return this.channels.size > 0;
   }
 
-  /** @returns {boolean} True if any audio or mod channels are loaded. */
+  /** @returns {boolean} True if any audio, mod, or ahx channels are loaded. */
   get hasAudio() {
-    return this._audioElements.length > 0 || this._modPlayers.length > 0;
+    return this._audioElements.length > 0 || this._modPlayers.length > 0 || this._ahxPlayers.length > 0;
   }
 
   /**
@@ -521,17 +534,123 @@ export class MediaLoader {
         ch.gainNode.gain.value = gain;
         return;
       }
+      if (ch.type === 'ahx' && ch.ahxPlayer) {
+        ch.ahxPlayer.gain.gain.value = gain;
+        return;
+      }
     }
   }
 
   /**
    * Get the media type for the first audio-like channel.
-   * @returns {'audio'|'mod'|null}
+   * @returns {'audio'|'mod'|'ahx'|null}
    */
   get audioType() {
     for (const ch of this.channels.values()) {
-      if (ch.type === 'audio' || ch.type === 'mod') return ch.type;
+      if (ch.type === 'audio' || ch.type === 'mod' || ch.type === 'ahx') return ch.type;
     }
     return null;
+  }
+
+  // ── AHX methods ───────────────────────────────────────
+
+  /** Load an AHX tracker file. */
+  async _loadAhx(channel, url) {
+    const ap = new AhxPlayer();
+    await ap.load(url);
+    // Don't auto-play — wait for user gesture
+    this._ahxPlayers.push(ap);
+
+    // Share the AudioContext if we already have one
+    if (!this._audioCtx) {
+      this._audioCtx = ap.audioContext;
+    }
+
+    // Track playback state
+    let playing = false;
+
+    this.channels.set(channel, {
+      type: 'ahx',
+      ahxPlayer: ap,
+      texData: ap._texData,
+      get ahxPlaying() { return playing; },
+      set ahxPlaying(v) { playing = v; },
+      get ahxCurrentTime() { return ap.currentTime; },
+      get ahxDuration() { return ap.duration; },
+    });
+  }
+
+  /** Resume AHX playback. */
+  resumeAhx() {
+    for (const ap of this._ahxPlayers) {
+      ap.play();
+    }
+    for (const [, ch] of this.channels) {
+      if (ch.type === 'ahx') ch.ahxPlaying = true;
+    }
+  }
+
+  /** Pause AHX playback. */
+  pauseAhx() {
+    for (const ap of this._ahxPlayers) {
+      ap.pause();
+    }
+    for (const [, ch] of this.channels) {
+      if (ch.type === 'ahx') ch.ahxPlaying = false;
+    }
+  }
+
+  /** @returns {boolean} True if AHX is currently playing. */
+  get ahxPlaying() {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'ahx') return ch.ahxPlaying;
+    }
+    return false;
+  }
+
+  /** Get the first AHX channel's playback state. */
+  getAhxState() {
+    for (const ch of this.channels.values()) {
+      if (ch.type === 'ahx') {
+        return { currentTime: ch.ahxCurrentTime, duration: ch.ahxDuration };
+      }
+    }
+    return null;
+  }
+
+  /** Seek AHX to a specific time in seconds. */
+  seekAhx(time) {
+    for (const ap of this._ahxPlayers) {
+      ap.seekTo(time);
+    }
+  }
+
+  /**
+   * Switch the AHX source on the first AHX channel.
+   * @param {string} url  Absolute URL to the new AHX file.
+   * @param {number} [gain=1]  Gain multiplier.
+   */
+  async switchAhxSource(url, gain) {
+    let ahxChannel = -1;
+    for (const [channel, ch] of this.channels) {
+      if (ch.type === 'ahx') { ahxChannel = channel; break; }
+    }
+    if (ahxChannel < 0) return;
+
+    const ch = this.channels.get(ahxChannel);
+    ch.ahxPlayer.stop();
+    ch.ahxPlaying = false;
+
+    await ch.ahxPlayer.load(url, gain);
+    ch.texData = ch.ahxPlayer._texData;
+    ch.ahxPlayer.play();
+    ch.ahxPlaying = true;
+  }
+
+  /** Set gain for AHX player. */
+  setAhxGain(gain) {
+    for (const ap of this._ahxPlayers) {
+      if (ap.gain) ap.gain.gain.value = gain;
+    }
   }
 }

@@ -127,12 +127,13 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 
 INSTANCE_FONT="$TEMP_DIR/material-symbols-instance.ttf"
 
+# Keep FILL as a variable axis (0=outlined, 1=filled) so both
+# styles are available via CSS font-variation-settings.
 "$FONTTOOLS_BIN" varLib.instancer "$INPUT_FONT" \
-  "FILL=${FILL_VALUE}" \
+  "FILL=0:1" \
   "GRAD=${GRAD_VALUE}" \
   "opsz=${OPSZ_VALUE}" \
   "wght=${WGHT_VALUE}" \
-  --static \
   --output "$INSTANCE_FONT"
 
 subset_font() {

@@ -257,11 +257,11 @@ export default class ShaderTuner {
     this._proxyObj = {};
     this._sliderInputs = [];
 
-    // Audio/MOD track selector (if audio is active)
+    // Audio/MOD/AHX track selector (if audio is active)
     if (hasAudio) {
       const ac = this._audioConfig;
-      const currentType = ac.defaultType;  // 'mod' | 'audio'
-      const tracks = currentType === 'mod' ? ac.modTracks : ac.audioTracks;
+      const currentType = ac.defaultType;  // 'mod' | 'audio' | 'ahx'
+      const tracks = currentType === 'mod' ? ac.modTracks : currentType === 'ahx' ? ac.ahxTracks : ac.audioTracks;
       const trackMap = {};
       const pathMap = {};
       const gainMap = {};
@@ -279,11 +279,11 @@ export default class ShaderTuner {
       // Type selector (Audio file / Tracker) — hide when an unmanaged entry is present
       const hasUnmanaged = tracks.some(t => t.label.startsWith('! '));
       if (!hasUnmanaged) {
-        this._proxyObj.__audioType = currentType === 'mod' ? 'Tracker: MOD/XM...' : 'Audio URL';
-        const typeCtrl = folder.add(this._proxyObj, '__audioType', ['Audio URL', 'Tracker: MOD/XM...'])
+        this._proxyObj.__audioType = currentType === 'mod' ? 'Tracker: MOD/XM...' : currentType === 'ahx' ? 'Tracker: AHX' : 'Audio URL';
+        const typeCtrl = folder.add(this._proxyObj, '__audioType', ['Audio URL', 'Tracker: MOD/XM...', 'Tracker: AHX'])
           .name('Type')
           .onChange((label) => {
-            const newType = label === 'Tracker: MOD/XM...' ? 'mod' : 'audio';
+            const newType = label === 'Tracker: MOD/XM...' ? 'mod' : label === 'Tracker: AHX' ? 'ahx' : 'audio';
             if (newType !== currentType) ac.onSwitchType(newType);
           });
         this._enhanceSelect(typeCtrl);
@@ -593,8 +593,8 @@ export default class ShaderTuner {
 }
 
 /**
- * Build audio/mod track config for the shader tuner panel.
- * Loads both mod and audio folder indexes so the user can switch
+ * Build audio/mod/ahx track config for the shader tuner panel.
+ * Loads mod, audio, and ahx folder indexes so the user can switch
  * between track types via the Type selector in the tuner.
  *
  * @param {object}   annotations  Parsed @iChannel media annotations
@@ -607,8 +607,8 @@ export default class ShaderTuner {
  */
 export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getSource, setSource, applyShader }) {
   if (!mediaLoader.hasAudio) return null;
-  const currentType = mediaLoader.audioType;  // 'audio' | 'mod'
-  const ann = annotations.find(a => a.type === 'audio' || a.type === 'mod');
+  const currentType = mediaLoader.audioType;  // 'audio' | 'mod' | 'ahx'
+  const ann = annotations.find(a => a.type === 'audio' || a.type === 'mod' || a.type === 'ahx');
   if (!ann) return null;
 
   // Derive the folder path from the annotation (e.g. "../../media/mod/song.mod" → "../../media/mod/")
@@ -618,17 +618,24 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
   // Derive both mod and audio folder paths.
   // If the annotation path already lives under a recognized media folder, swap between them.
   // Otherwise fall back to the well-known ../../media/{audio,mod}/ paths relative to the shader.
-  let modFolder, audioFolder;
+  let modFolder, audioFolder, ahxFolder;
   if (/audio\/$/i.test(folder)) {
     audioFolder = folder;
     modFolder = folder.replace(/audio\/$/, 'mod/');
+    ahxFolder = folder.replace(/audio\/$/, 'ahx/');
   } else if (/mod\/$/i.test(folder)) {
     modFolder = folder;
     audioFolder = folder.replace(/mod\/$/, 'audio/');
+    ahxFolder = folder.replace(/mod\/$/, 'ahx/');
+  } else if (/ahx\/$/i.test(folder)) {
+    ahxFolder = folder;
+    modFolder = folder.replace(/ahx\/$/, 'mod/');
+    audioFolder = folder.replace(/ahx\/$/, 'audio/');
   } else {
     // Unmanaged path — use standard media locations relative to shaders/
     modFolder = '../../media/mod/';
     audioFolder = '../../media/audio/';
+    ahxFolder = '../../media/ahx/';
   }
 
   async function loadIndex(folderPath) {
@@ -656,15 +663,17 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
     });
   }
 
-  const [modFiles, audioFiles] = await Promise.all([
+  const [modFiles, audioFiles, ahxFiles] = await Promise.all([
     loadIndex(modFolder),
     loadIndex(audioFolder),
+    loadIndex(ahxFolder),
   ]);
 
   const modTracks = buildTracks(modFiles, modFolder);
   const audioTracks = buildTracks(audioFiles, audioFolder);
+  const ahxTracks = buildTracks(ahxFiles, ahxFolder);
   const currentUrl = new URL(ann.path.replace(/#/g, '%23'), baseUrl).href;
-  const allTracks = currentType === 'mod' ? modTracks : audioTracks;
+  const allTracks = currentType === 'mod' ? modTracks : currentType === 'ahx' ? ahxTracks : audioTracks;
   const currentTrack = allTracks.find(t => t.url === currentUrl);
   const currentGain = currentTrack ? currentTrack.gain : 1;
 
@@ -683,29 +692,32 @@ export async function buildAudioConfig(annotations, baseUrl, { mediaLoader, getS
   return {
     modTracks,
     audioTracks,
+    ahxTracks,
     defaultType: currentType,
     currentUrl,
     currentGain,
     onSwitch: (url, annPath, gain) => {
       if (currentType === 'mod') {
         mediaLoader.switchModSource(url, gain);
+      } else if (currentType === 'ahx') {
+        mediaLoader.switchAhxSource(url, gain);
       } else {
         mediaLoader.switchAudioSource(url, gain);
       }
       const src = getSource();
       const re = new RegExp(
-        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod))',
+        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)(\\s+(?:audio|mod|ahx))',
       );
       const updated = src.replace(re, `$1"${annPath}"$2`);
       if (updated !== src) setSource(updated);
     },
     onSwitchType: (newType) => {
-      const tracks = newType === 'mod' ? modTracks : audioTracks;
+      const tracks = newType === 'mod' ? modTracks : newType === 'ahx' ? ahxTracks : audioTracks;
       if (tracks.length === 0) return;
       const newPath = tracks[0].annPath;
       const src = getSource();
       const re = new RegExp(
-        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)\\s+(?:audio|mod)',
+        '(//\\s*@iChannel' + ann.channel + '\\s+)(?:"[^"]+"|\\S+)\\s+(?:audio|mod|ahx)',
       );
       const updated = src.replace(re, `$1"${newPath}" ${newType}`);
       if (updated !== src) {

@@ -120,7 +120,9 @@ setInterval(() => {
     timeSlider.value = t;
   }
   // Audio slider update
-  const as = mediaLoader.audioType === 'mod' ? mediaLoader.getModState()
+  const atype = mediaLoader.audioType;
+  const as = atype === 'mod' ? mediaLoader.getModState()
+           : atype === 'ahx' ? mediaLoader.getAhxState()
            : gpuAudio.hasAudio ? gpuAudio.getState()
            : mediaLoader.getAudioState();
   if (as && !audioSliderDragging) {
@@ -183,6 +185,9 @@ timeSlider.addEventListener("input", () => {
   if (mediaLoader.audioType === 'mod') {
     const ms = mediaLoader.getModState();
     mediaLoader.seekMod(ms && ms.duration > 0 ? t % ms.duration : t);
+  } else if (mediaLoader.audioType === 'ahx') {
+    const as2 = mediaLoader.getAhxState();
+    mediaLoader.seekAhx(as2 && as2.duration > 0 ? t % as2.duration : t);
   } else if (gpuAudio.hasAudio) {
     gpuAudio.seekTo(t);
   } else {
@@ -193,6 +198,7 @@ timeSlider.addEventListener("input", () => {
 btnResetTime.addEventListener("click", () => {
   activeRenderer().seekTo(0);
   if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(0);
+  else if (mediaLoader.audioType === 'ahx') mediaLoader.seekAhx(0);
   else if (gpuAudio.hasAudio) gpuAudio.seekTo(0);
   else mediaLoader.seekAudio(0);
   timeSlider.max = String(SLIDER_INIT_MAX);
@@ -204,6 +210,7 @@ btnResetTime.addEventListener("click", () => {
 audioSlider.addEventListener("pointerdown", () => { audioSliderDragging = true; });
 audioSlider.addEventListener("input", () => {
   if (mediaLoader.audioType === 'mod') mediaLoader.seekMod(parseFloat(audioSlider.value));
+  else if (mediaLoader.audioType === 'ahx') mediaLoader.seekAhx(parseFloat(audioSlider.value));
   else if (gpuAudio.hasAudio) gpuAudio.seekTo(parseFloat(audioSlider.value));
   else mediaLoader.seekAudio(parseFloat(audioSlider.value));
 });
@@ -212,6 +219,9 @@ btnAudioPlayPause.addEventListener("click", () => {
   if (mediaLoader.audioType === 'mod') {
     if (mediaLoader.modPlaying) { mediaLoader.pauseMod(); btnAudioPlayPause.textContent = "play_arrow"; }
     else { mediaLoader.resumeMod(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (mediaLoader.audioType === 'ahx') {
+    if (mediaLoader.ahxPlaying) { mediaLoader.pauseAhx(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { mediaLoader.resumeAhx(); btnAudioPlayPause.textContent = "pause"; }
   } else if (gpuAudio.hasAudio) {
     if (gpuAudio.playing) { gpuAudio.pause(); btnAudioPlayPause.textContent = "play_arrow"; }
     else { gpuAudio.resume(); btnAudioPlayPause.textContent = "pause"; }
@@ -233,6 +243,9 @@ btnPlayPause.addEventListener("click", () => {
   if (mediaLoader.audioType === 'mod') {
     if (r.paused) { mediaLoader.pauseMod(); btnAudioPlayPause.textContent = "play_arrow"; }
     else { mediaLoader.resumeMod(); btnAudioPlayPause.textContent = "pause"; }
+  } else if (mediaLoader.audioType === 'ahx') {
+    if (r.paused) { mediaLoader.pauseAhx(); btnAudioPlayPause.textContent = "play_arrow"; }
+    else { mediaLoader.resumeAhx(); btnAudioPlayPause.textContent = "pause"; }
   } else if (gpuAudio.hasAudio) {
     if (r.paused) { gpuAudio.pause(); btnAudioPlayPause.textContent = "play_arrow"; }
     else { gpuAudio.resume(); btnAudioPlayPause.textContent = "pause"; }
@@ -522,6 +535,8 @@ async function applyShader(source, focusTuner) {
     let blocked = false;
     if (mediaLoader.audioType === 'mod') {
       mediaLoader.resumeMod();
+    } else if (mediaLoader.audioType === 'ahx') {
+      mediaLoader.resumeAhx();
     } else if (gpuAudio.hasAudio) {
       gpuAudio.resume();
     } else {

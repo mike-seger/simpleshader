@@ -17,7 +17,10 @@ connected_tv
 content_copy
 delete
 download
+eject
 fast_forward
+fast_rewind
+first_page
 filter_alt
 flag
 folder
@@ -27,6 +30,7 @@ forward_5
 fullscreen
 fullscreen_exit
 info
+last_page
 left_panel_close
 left_panel_open
 link
@@ -44,6 +48,7 @@ open_in_browser
 open_in_new
 pause
 play_arrow
+play_pause
 recommend
 refresh
 replay
@@ -67,6 +72,7 @@ thumb_up
 tune
 save
 shuffle
+stop
 unfold_less
 unfold_more
 upload

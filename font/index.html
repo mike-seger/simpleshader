@@ -8,13 +8,17 @@
 <body>
   <main>
     <h1>Material Symbols Preview</h1>
-    <p>Lists every ligature included in player.woff2.</p>
+    <p>Lists every ligature included in symbols.woff2, shown in both outlined and filled variants.</p>
     <ul id="icon-list"></ul>
   </main>
   <script src="used-symbols-names.js"></script>
   <script>
     document.getElementById('icon-list').innerHTML = SYMBOL_NAMES.map(name =>
-      `<li><span class="icon" aria-hidden="true">${name}</span><code>${name}</code></li>`
+      `<li>
+        <span class="icon" aria-hidden="true">${name}</span>
+        <span class="icon-filled" aria-hidden="true">${name}</span>
+        <code>${name}</code>
+      </li>`
     ).join('');
   </script>
 </body>
