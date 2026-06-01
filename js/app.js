@@ -528,29 +528,43 @@ async function applyShader(source, focusTuner) {
   const hasAudio = mediaLoader.hasAudio || gpuAudio.hasAudio;
   audioControls.classList.toggle("hidden", !hasAudio);
 
-  // Auto-play audio when loading an audio-reactive shader.
-  // If the browser blocks autoplay, pause the visualizer too so both
-  // start together when the user clicks the main play button.
+  // Sync audio state initially with visualizer play/pause state
   if (hasAudio) {
+    const r = activeRenderer();
     let blocked = false;
-    if (mediaLoader.audioType === 'mod') {
-      mediaLoader.resumeMod();
-    } else if (mediaLoader.audioType === 'ahx') {
-      mediaLoader.resumeAhx();
-    } else if (gpuAudio.hasAudio) {
-      gpuAudio.resume();
-    } else {
-      blocked = !(await mediaLoader.tryResumeAudio());
-    }
-    if (blocked) {
-      const r = activeRenderer();
-      if (!r.paused) {
-        r.togglePause();
-        btnPlayPause.textContent = "play_arrow";
+    
+    if (r.paused) {
+      // If the visualizer is paused, keep/put audio in paused state
+      if (mediaLoader.audioType === 'mod') {
+        mediaLoader.pauseMod();
+      } else if (mediaLoader.audioType === 'ahx') {
+        mediaLoader.pauseAhx();
+      } else if (gpuAudio.hasAudio) {
+        gpuAudio.pause();
+      } else {
+        mediaLoader.pauseAudio();
       }
       btnAudioPlayPause.textContent = "play_arrow";
     } else {
-      btnAudioPlayPause.textContent = "pause";
+      // If visualizer is active, try to auto-play audio
+      if (mediaLoader.audioType === 'mod') {
+        mediaLoader.resumeMod();
+      } else if (mediaLoader.audioType === 'ahx') {
+        mediaLoader.resumeAhx();
+      } else if (gpuAudio.hasAudio) {
+        gpuAudio.resume();
+      } else {
+        blocked = !(await mediaLoader.tryResumeAudio());
+      }
+      if (blocked) {
+        if (!r.paused) {
+          r.togglePause();
+          btnPlayPause.textContent = "play_arrow";
+        }
+        btnAudioPlayPause.textContent = "play_arrow";
+      } else {
+        btnAudioPlayPause.textContent = "pause";
+      }
     }
   }
 
