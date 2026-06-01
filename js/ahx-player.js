@@ -14,7 +14,7 @@
  * no native seek API.
  */
 
-const AHX_SCRIPT_URL = "tmp/ahx-web-player/ahx.js";
+const AHX_SCRIPT_URL = "js/ahx.js";
 
 let ahxLoaded = false;
 let ahxLoadPromise = null;

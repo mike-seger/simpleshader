@@ -36,12 +36,15 @@ void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
  * mainSound() output as 16-bit stereo RGBA.
  */
 function makeFragSrc(userCode) {
+  const hasISampleRateDef = /\b(?:uniform\s+float|const\s+float|float|#define)\s+iSampleRate\b/.test(userCode);
+  const iSampleRateDecl = hasISampleRateDef ? "" : "uniform float iSampleRate;\n";
+
   return `precision highp float;
 uniform float u_sampleRate;
 uniform float u_texWidth;
 uniform float u_totalSamples;
 uniform float u_chunkOffset;
-
+${iSampleRateDecl}
 ${userCode}
 
 void main() {
@@ -336,6 +339,10 @@ export default class GpuAudio {
     gl.uniform1f(gl.getUniformLocation(this._program, 'u_sampleRate'),   sampleRate);
     gl.uniform1f(gl.getUniformLocation(this._program, 'u_texWidth'),     texWidth);
     gl.uniform1f(gl.getUniformLocation(this._program, 'u_totalSamples'), totalSamples);
+    const iSampleRateLoc = gl.getUniformLocation(this._program, 'iSampleRate');
+    if (iSampleRateLoc) {
+      gl.uniform1f(iSampleRateLoc, sampleRate);
+    }
     const uOffset = gl.getUniformLocation(this._program, 'u_chunkOffset');
 
     const left   = new Float32Array(totalSamples);

@@ -511,7 +511,7 @@ async function applyShader(source, focusTuner) {
       const soundUrl = new URL(effectiveGpuAnn.path, baseUrl).href;
       const soundRes = await fetch(soundUrl);
       if (!soundRes.ok) throw new Error(`HTTP ${soundRes.status}`);
-      const soundSrc = await soundRes.text();
+      const soundSrc = await resolveForPath(await soundRes.text(), soundUrl);
       await gpuAudio.load(soundSrc, 44100, effectiveGpuAnn.duration);
       // Register gpu-audio FFT data as an iChannel so the renderer binds it
       const ch = effectiveGpuAnn.channel ?? 0;

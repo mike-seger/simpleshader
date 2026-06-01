@@ -1,11 +1,13 @@
 // # SOUND https://www.shadertoy.com/view/7clGD7
 
+// @include audio-library-test+visual-common.glsl
 
 #define SCALE_MINOR  0x5AD
+#define iSampleRate  44100.0
 
 float phaseSamp(int samp, float freq, float sr) {
     int period = int(sr);
-    int sampMod = samp % period;
+    int sampMod = imod(samp, period);
     return fract(float(sampMod) * freq / sr);
 }
 float mtof(float note) {
@@ -65,8 +67,9 @@ float quantize(float note, int scale) {
     float octave = floor(note / 12.0);
     int degree = int(mod(note, 12.0));
     for (int i = 0; i < 12; i++) {
-        if (((scale >> ((degree + i) % 12)) & 1) == 1)
-            return octave * 12.0 + float((degree + i) % 12);
+        int bit = imod(degree + i, 12);
+        if (mod(floor(float(scale) / pow(2.0, float(bit))), 2.0) >= 1.0)
+            return octave * 12.0 + float(bit);
     }
     return note;
 }
@@ -94,8 +97,9 @@ vec2 mainSound(int samp, float time) {
     float hat      = hihatSynth(time, time - s.tStep, hatDecay) * hatAmp;
 
     // ─── BASS ────────────────────────────────────────────────
-    int bassSteps[8] = int[8](0, 12, 0, 7, 0, 12, 7, 0);
-    float bassFreq   = mtof(float(s.root + bassSteps[s.s16i % 8]));
+    int bsi = imod(s.s16i, 8);
+    int bassStep = (bsi==1||bsi==5) ? 12 : (bsi==3||bsi==6) ? 7 : 0;
+    float bassFreq = mtof(float(s.root + bassStep));
     float bassOsc    = sawBL (phaseSamp(samp, bassFreq,     sr), bassFreq, sr) * 0.35
                      + sinOsc(phaseSamp(samp, bassFreq*0.5, sr))               * 0.65;
     float bass = bassOsc * envAD(s.tStep, 0.004, s.s16Len * 0.55) * s.duck;

@@ -64,6 +64,7 @@ const SHADER_INDEX = [
     shaders: [
       { name: "Audio Library Test+visual", path: "shaders/shadertoy-gpu-audio/audio-library-test+visual.glsl" },
       { name: "Frozen Wasteland", path: "shaders/shadertoy-gpu-audio/frozen-wasteland.glsl" },
+      { name: "Melodic Trance 20260530", path: "shaders/shadertoy-gpu-audio/20260530_melodic trance .glsl" },
       { name: "Sound Acid Jam", path: "shaders/shadertoy-gpu-audio/sound-acid-jam.glsl" },
       { name: "Stardust", path: "shaders/shadertoy-gpu-audio/stardust.glsl" },
       { name: "Xyptonjtroz", path: "shaders/shadertoy-gpu-audio/xyptonjtroz.glsl" },
